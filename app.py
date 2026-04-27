@@ -12,7 +12,7 @@ app = Flask(__name__)
 # Default: SQLite file (app.db). Override by setting DATABASE_URL env var, e.g.:
 #   PostgreSQL : postgresql+psycopg2://user:pass@host:5432/dbname
 #   MySQL      : mysql+pymysql://user:pass@host:3306/dbname
-app.config["SQLALCHEMY_DATABASE_URI"] = "postgresql+psycopg2://postgres:9788%40Srinithi@db.cusbryojwnldabchhfkx.supabase.co:5432/postgres"
+app.config["SQLALCHEMY_DATABASE_URI"] = "postgresql+psycopg2://postgres.cusbryojwnldabchhfkx:9788%40Srinithi@aws-1-ap-northeast-1.pooler.supabase.com:6543/postgres"
 app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
     "pool_pre_ping": True,
     "pool_recycle": 300,
