@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<div class="container">
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <h2>SRINITHI GARMENT</h2>
+
+        <ul>
+            <li><a href="/dashboard">🏠 Dashboard</a></li>
+
+            <li class="menu-title">Cutting</li>
+            <li><a href="/program">📋 Program Entry</a></li>
+            <li><a href="/overall_programs">📊 Overall Programs</a></li>
+
+            <li class="menu-title">Master</li>
+            <li><a href="/colour">🎨 Colour Master</a></li>
+            <li><a href="/size">📏 Size Master</a></li>
+            <li><a href="/fabric">🧵 Fabric Master</a></li>
+            <li><a href="/product">📦 Product Master</a></li>
+
+            <li class="menu-title">Reports</li>
+
+            <li><a href="/logout">🚪 Logout</a></li>
+        </ul>
+    </div>
+
+    <!-- Main -->
+    <div class="main">
+        <h1>Welcome to Cutting Dashboard 🚀</h1>
+
+        <div class="cards">
+            <div class="card">
+                <h3>Total Programs</h3>
+                <p>120</p>
+            </div>
+
+            <div class="card">
+                <h3>Total Cutting</h3>
+                <p>5400 pcs</p>
+            </div>
+
+            <div class="card">
+                <h3>Pending</h3>
+                <p>800 pcs</p>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+</body>
+</html>

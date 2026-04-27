@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Overall Programs</title>
+<style>
+
+body {
+    font-family: Arial, sans-serif;
+    background: #f5f6fa;
+    margin: 15px;
+}
+
+h1 {
+    padding: 4px;
+    text-align: center;
+    font-size: 24px;
+    margin-bottom: 10px;
+}
+
+.filter-box {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-bottom: 20px;
+}
+
+.filter-box input,
+.filter-box select {
+    padding: 2px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    min-width: 100px;
+}
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+}
+
+.data-table th {
+    background: #1f2a36;
+    color: white;
+    padding: 5px;
+    font-size: 16px;
+    text-align: center;
+}
+
+.data-table td {
+    padding: 4px;
+    border-bottom: 1px solid #ddd;
+    font-size: 14px;
+    text-align: center;
+}
+
+.data-table tr:hover {
+    background: #f1f7ff;
+}
+
+.data-table a {
+    text-decoration: none;
+    color: #007bff;
+    font-weight: bold;
+}
+
+</style>
+</head>
+
+<body>
+
+<h1>ALL PROGRAMS</h1>
+
+<div class="filter-box">
+
+<input type="text" id="filterProgram" placeholder="Program No">
+<input type="text" id="filterFabric" placeholder="Fabric">
+<input type="text" id="filterProduct" placeholder="Product">
+
+<input type="date" id="fromDate">
+<input type="date" id="toDate">
+
+<select id="filterStatus">
+<option value="">All Status</option>
+<option value="pending">Pending</option>
+<option value="completed">DONE</option>
+</select>
+
+</div>
+
+<table class="data-table">
+<thead>
+<tr>
+<th>Program No</th>
+<th>Date</th>
+<th>Fabric</th>
+<th>DIA</th>
+<th>Type</th>
+<th>Product</th>
+<th>Colour</th>
+<th>Size</th>
+<th>Ratio</th>
+<th>Rolls</th>
+<th>Status</th>
+</tr>
+</thead>
+
+<tbody>
+{% for p in programs %}
+<tr>
+<td>
+<a href="/program/{{ p.program_no }}">
+{{ p.program_no }}
+</a>
+</td>
+<td>{{ p.date }}</td>
+<td>{{ p.fabric }}</td>
+<td>{{ p.dia }}</td>
+<td>{{ p.type }}</td>
+<td>{{ p.product }}</td>
+<td>{{ p.color }}</td>
+<td>{{ p.size }}</td>
+<td>{{ p.ratio }}</td>
+<td>{{ p.rolls }}</td>
+<td>{{ p.status }}</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+
+<script>
+
+let filters = {
+    program: "",
+    fabric: "",
+    product: "",
+    status: "",
+    fromDate: "",
+    toDate: ""
+};
+
+function parseDate(dateStr){
+    if(!dateStr) return null;
+    let parts = dateStr.split("-");
+    return new Date(parts[2], parts[1]-1, parts[0]);
+}
+
+function applyFilter(){
+    let rows = document.querySelectorAll(".data-table tbody tr");
+
+    rows.forEach(row => {
+        let cols = row.children;
+
+        let program = cols[0].innerText.toLowerCase();
+        let fabric  = cols[2].innerText.toLowerCase();
+        let product = cols[5].innerText.toLowerCase();
+        let status  = cols[10].innerText.toLowerCase();
+
+        let rowDateText = cols[1].innerText;
+        let rowDate = parseDate(rowDateText);
+
+        let from = filters.fromDate ? new Date(filters.fromDate) : null;
+        let to   = filters.toDate ? new Date(filters.toDate) : null;
+
+        let matchDate = true;
+
+        if(from){ from.setHours(0,0,0,0); }
+        if(to){ to.setHours(23,59,59,999); }
+
+        if(from && rowDate && rowDate < from) matchDate = false;
+        if(to && rowDate && rowDate > to) matchDate = false;
+
+        let show =
+            program.includes(filters.program) &&
+            fabric.includes(filters.fabric) &&
+            product.includes(filters.product) &&
+            status.includes(filters.status) &&
+            matchDate;
+
+        row.style.display = show ? "" : "none";
+    });
+}
+
+document.getElementById("filterProgram").addEventListener("keyup", function(){
+    filters.program = this.value.toLowerCase();
+    applyFilter();
+});
+
+document.getElementById("filterFabric").addEventListener("keyup", function(){
+    filters.fabric = this.value.toLowerCase();
+    applyFilter();
+});
+
+document.getElementById("filterProduct").addEventListener("keyup", function(){
+    filters.product = this.value.toLowerCase();
+    applyFilter();
+});
+
+document.getElementById("filterStatus").addEventListener("change", function(){
+    filters.status = this.value.toLowerCase();
+    applyFilter();
+});
+
+document.getElementById("fromDate").addEventListener("change", function(){
+    filters.fromDate = this.value;
+    applyFilter();
+});
+
+document.getElementById("toDate").addEventListener("change", function(){
+    filters.toDate = this.value;
+    applyFilter();
+});
+
+</script>
+
+</body>
+</html>

@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Edit Program</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+
+<div class="main">
+
+<h2>Edit Program</h2>
+
+<form method="POST">
+
+<p><b>Program:</b> {{ p.program_no }}</p>
+<p><b>Product:</b> {{ p.product }}</p>
+<p><b>Color:</b> {{ p.color }}</p>
+<p><b>Size:</b> {{ p.size }}</p>
+
+<label>Ratio</label>
+<input type="text" name="ratio" value="{{ p.ratio }}">
+
+<br><br>
+
+<label>Rolls</label>
+<input type="text" name="rolls" value="{{ p.rolls }}">
+
+<br><br>
+
+<label>Status</label>
+<select name="status">
+<option value="PENDING" {% if p.status == "PENDING" %}selected{% endif %}>PENDING</option>
+<option value="DONE" {% if p.status == "DONE" %}selected{% endif %}>DONE</option>
+</select>
+
+<br><br>
+
+<button type="submit">Update</button>
+
+</form>
+
+<br>
+<a href="/program">⬅ Back</a>
+
+</div>
+
+</body>
+</html>

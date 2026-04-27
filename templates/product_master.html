@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Product Master</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<div class="container">
+
+<!-- SIDEBAR -->
+<div class="sidebar">
+    <h2>SRINITHI GARMENT</h2>
+
+    <ul>
+        <li><a href="/dashboard">🏠 Dashboard</a></li>
+
+        <li class="menu-title">Cutting</li>
+        <li><a href="/program">📋 Program Entry</a></li>
+        <li><a href="/overall_programs">📊 Overall Programs</a></li>
+
+        <li class="menu-title">Master</li>
+        <li><a href="/colour">🎨 Colour Master</a></li>
+        <li><a href="/size">📏 Size Master</a></li>
+        <li><a href="/fabric">🧵 Fabric Master</a></li>
+        <li><a href="/product">📦 Product Master</a></li>
+
+        <li><a href="/logout">🚪 Logout</a></li>
+    </ul>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+
+<h2>PRODUCT MASTER</h2>
+
+<!-- FILTER -->
+<div class="form-card" style="display:flex; gap:10px;">
+<form method="GET" style="display:flex; gap:10px;">
+<input name="search" placeholder="Product">
+<input placeholder="Brand">
+<input placeholder="Category">
+<input placeholder="Product Type">
+<button class="btn edit">SEARCH</button>
+</form>
+</div>
+
+<br>
+
+<a href="/product/new" class="btn edit">+ NEW</a>
+
+<!-- TABLE -->
+<table class="data-table">
+<tr>
+<th>S.No</th>
+<th>Product</th>
+<th>Brand</th>
+<th>Category</th>
+<th>Product Type</th>
+<th>No. Colors</th>
+<th>No. Sizes</th>
+<th>Action</th>
+</tr>
+
+{% for p in products %}
+<tr>
+<td>{{ loop.index }}</td>
+<td>{{ p.name }}</td>
+<td>{{ p.brand }}</td>
+<td>{{ p.category }}</td>
+<td>{{ p.type }}</td>
+<td>{{ p.colors|length }}</td>
+<td>{{ p.sizes|length }}</td>
+<td>
+<a class="btn edit" href="/edit_product/{{ p.id }}">Edit</a>
+<a class="btn delete" href="/delete_product/{{ p.id }}" onclick="return confirm('Delete?')">Delete</a>
+</td>
+</tr>
+{% endfor %}
+
+</table>
+
+</div>
+</div>
+
+</body>
+</html>

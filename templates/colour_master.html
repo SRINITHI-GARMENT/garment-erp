@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Colour Master</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<div class="container">
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <h2>SRINITHI GARMENT</h2>
+
+        <ul>
+            <li><a href="/dashboard">🏠 Dashboard</a></li>
+
+            <li class="menu-title">Cutting</li>
+            <li><a href="/program">📋 Program Entry</a></li>
+            <li><a href="/overall_programs">📊 Overall Programs</a></li>
+
+            <li class="menu-title">Master</li>
+            <li><a href="/colour">🎨 Colour Master</a></li>
+            <li><a href="/size">📏 Size Master</a></li>
+            <li><a href="/fabric">🧵 Fabric Master</a></li>
+            <li><a href="/product">📦 Product Master</a></li>
+
+            <li class="menu-title">Reports</li>
+
+            <li><a href="/logout">🚪 Logout</a></li>
+        </ul>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main">
+        <h1>Colour Master</h1>
+
+        <!-- FORM -->
+        <div class="form-card">
+            <form method="POST">
+                <div class="form-group">
+                    <label>Colour Name</label>
+                    <input type="text" name="colour" placeholder="Enter colour name" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Colour Code</label>
+                    <input type="text" name="code" placeholder="Optional code">
+                </div>
+
+                <button type="submit">Save Colour</button>
+            </form>
+        </div>
+
+        <!-- SEARCH -->
+        <div style="margin-top:20px;">
+            <form method="GET">
+                <input type="text" name="search" placeholder="Search colour">
+                <button type="submit">Search</button>
+            </form>
+        </div>
+
+        <!-- TABLE -->
+        <table class="data-table">
+            <tr>
+                <th>S.No</th>
+                <th>Colour</th>
+                <th>Code</th>
+                <th>Action</th>
+            </tr>
+
+            {% for c in colours %}
+            <tr>
+                <td>{{ loop.index }}</td>
+                <td>{{ c.name }}</td>
+                <td>{{ c.code }}</td>
+                <td>
+                    <a href="/edit_colour/{{ c.id }}">✏️ Edit</a> |
+                    <a href="/delete_colour/{{ c.id }}" onclick="return confirm('Are you sure?')">🗑 Delete</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </table>
+
+    </div>
+
+</div>
+
+</body>
+</html>

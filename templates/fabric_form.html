@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Fabric Entry</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<div class="main">
+
+<h1>Fabric Entry</h1>
+
+<form method="POST">
+
+<input name="name" placeholder="Fabric Name" value="{{ fabric.name if fabric else '' }}" required>
+<input name="uom" placeholder="UOM" value="{{ fabric.uom if fabric else '' }}">
+<input name="gsm" placeholder="GSM" value="{{ fabric.gsm if fabric else '' }}">
+
+<!-- ================= DIA ================= -->
+<h3>DIA</h3>
+
+<div id="dia">
+
+{% if fabric and fabric.dia %}
+    {% for d in fabric.dia %}
+    <div class="dia-row">
+        <input name="dia[]" value="{{ d }}" onchange="checkDiaDuplicate(this)">
+        <button type="button" onclick="removeRow(this)">❌</button>
+    </div>
+    {% endfor %}
+{% else %}
+    <div class="dia-row">
+        <input name="dia[]">
+        <button type="button" onclick="removeRow(this)">❌</button>
+    </div>
+{% endif %}
+
+</div>
+
+<button type="button" onclick="addDia()">+ Add DIA</button>
+
+<!-- ================= COLOUR ================= -->
+<h3>Colour</h3>
+
+<div id="colour">
+
+{% if fabric and fabric.colour %}
+    {% for selected_colour in fabric.colour %}
+    <div class="colour-row">
+        <select name="colour[]" required onchange="checkColourDuplicate(this)">
+            <option value="">-- Select Colour --</option>
+            {% for c in colours %}
+            <option value="{{ c.name }}"
+            {% if c.name == selected_colour %}selected{% endif %}>
+                {{ c.name }}
+            </option>
+            {% endfor %}
+        </select>
+
+        <button type="button" onclick="removeRow(this)">❌</button>
+    </div>
+    {% endfor %}
+{% else %}
+    <div class="colour-row">
+        <select name="colour[]" required>
+            <option value="">-- Select Colour --</option>
+            {% for c in colours %}
+            <option value="{{ c.name }}">{{ c.name }}</option>
+            {% endfor %}
+        </select>
+
+        <button type="button" onclick="removeRow(this)">❌</button>
+    </div>
+{% endif %}
+
+</div>
+
+<button type="button" onclick="addColour()">+ Add Colour</button>
+
+<br><br>
+<button type="submit">Save</button>
+
+</form>
+
+</div>
+
+<!-- ================= JAVASCRIPT ================= -->
+
+<script>
+const colourList = {{ colours | map(attribute='name') | list | tojson }};
+
+function addDia(){
+    let container = document.getElementById("dia");
+    let row = document.createElement("div");
+    row.className = "dia-row";
+
+    let input = document.createElement("input");
+    input.name = "dia[]";
+
+    input.onchange = function(){
+        let values = [...document.querySelectorAll('input[name="dia[]"]')]
+                        .map(i => i.value.trim());
+        let duplicates = values.filter((v, i, a) => v && a.indexOf(v) !== i);
+        if(duplicates.includes(input.value.trim())){
+            alert("Duplicate DIA not allowed!");
+            input.value = "";
+            input.focus();
+        }
+    };
+
+    let btn = document.createElement("button");
+    btn.type = "button";
+    btn.innerText = "❌";
+    btn.onclick = function(){ removeRow(btn); };
+
+    row.appendChild(input);
+    row.appendChild(btn);
+    container.appendChild(row);
+}
+
+function checkDiaDuplicate(input){
+    let values = [...document.querySelectorAll('input[name="dia[]"]')]
+                    .map(i => i.value.trim());
+    let duplicates = values.filter((v, i, a) => v && a.indexOf(v) !== i);
+    if(duplicates.includes(input.value.trim())){
+        alert("Duplicate DIA not allowed!");
+        input.value = "";
+        input.focus();
+    }
+}
+
+function addColour(){
+    let container = document.getElementById("colour");
+    let row = document.createElement("div");
+    row.className = "colour-row";
+
+    let select = document.createElement("select");
+    select.name = "colour[]";
+    select.required = true;
+
+    let defaultOption = document.createElement("option");
+    defaultOption.value = "";
+    defaultOption.text = "-- Select Colour --";
+    select.appendChild(defaultOption);
+
+    colourList.forEach(function(c){
+        let option = document.createElement("option");
+        option.value = c;
+        option.text = c;
+        select.appendChild(option);
+    });
+
+    select.onchange = function(){ checkColourDuplicate(select); };
+
+    let btn = document.createElement("button");
+    btn.type = "button";
+    btn.innerText = "❌";
+    btn.onclick = function(){ removeRow(btn); };
+
+    row.appendChild(select);
+    row.appendChild(btn);
+    container.appendChild(row);
+}
+
+function checkColourDuplicate(select){
+    let values = [...document.querySelectorAll('select[name="colour[]"]')]
+                    .map(s => s.value);
+    let duplicates = values.filter((v, i, a) => v && a.indexOf(v) !== i);
+    if(duplicates.includes(select.value)){
+        alert("Duplicate Colour not allowed!");
+        select.value = "";
+        select.focus();
+    }
+}
+
+function removeRow(btn){
+    let parent = btn.parentElement;
+    let container = parent.parentElement;
+    if(container.children.length > 1){
+        parent.remove();
+    } else {
+        alert("At least one row required!");
+    }
+}
+</script>
+
+</body>
+</html>

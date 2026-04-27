@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Product Entry</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<div class="main">
+
+<h2>Product Entry</h2>
+
+<form method="POST">
+
+<div class="form-card">
+
+<div class="form-group">
+<label>Product</label>
+<input name="name" value="{{product.name if product else ''}}" required>
+</div>
+
+<div class="form-group">
+<label>Brand</label>
+<input name="brand" value="{{product.brand if product else ''}}">
+</div>
+
+<div class="form-group">
+<label>Category</label>
+<input name="category" value="{{product.category if product else ''}}">
+</div>
+
+<div class="form-group">
+<label>Product Type</label>
+<select name="type">
+<option value="Brand">Brand</option>
+<option value="Production">Production</option>
+</select>
+</div>
+
+</div>
+
+<!-- FABRIC -->
+<h3>Fabric & GSM</h3>
+<select name="fabric" id="fabric" onchange="loadColors()">
+{% for f in fabrics %}
+<option value="{{f.name}} ({{f.gsm}})"
+{% if product and product.fabric == f.name + " (" + f.gsm + ")" %}selected{% endif %}>
+    {{f.name}} ({{f.gsm}})
+</option>
+{% endfor %}
+</select>
+
+<!-- COLORS -->
+<h3>Colors</h3>
+<div id="colorBox">
+
+{% if product and product.colors %}
+    {% for selected_color in product.colors %}
+    <div class="color-row">
+        <select name="colors[]" onchange="checkColorDuplicate(this)">
+            <option value="">Select Color</option>
+            {% for c in colours %}
+            <option value="{{c.name}}"
+            {% if c.name == selected_color %}selected{% endif %}>
+                {{c.name}}
+            </option>
+            {% endfor %}
+        </select>
+
+        <button type="button" onclick="removeRow(this)">❌</button>
+    </div>
+    {% endfor %}
+{% else %}
+    <div class="color-row">
+        <select name="colors[]" onchange="checkColorDuplicate(this)">
+            <option value="">Select Color</option>
+            {% for c in colours %}
+            <option value="{{c.name}}">{{c.name}}</option>
+            {% endfor %}
+        </select>
+
+        <button type="button" onclick="removeRow(this)">❌</button>
+    </div>
+{% endif %}
+
+</div>
+
+<button type="button" class="btn edit" onclick="addColor()">+ ADD</button>
+
+<!-- SIZE -->
+<h3>Size</h3>
+<div id="sizeBox">
+
+{% if product and product.sizes %}
+    {% for selected_size in product.sizes %}
+    <div class="size-row">
+        <select name="sizes[]" onchange="checkSizeDuplicate(this)">
+            {% for s in sizes %}
+            <option value="{{s.name}}"
+            {% if s.name == selected_size %}selected{% endif %}>
+                {{s.name}}
+            </option>
+            {% endfor %}
+        </select>
+
+        <button type="button" onclick="removeRow(this)">❌</button>
+    </div>
+    {% endfor %}
+{% else %}
+    <div class="size-row">
+        <select name="sizes[]">
+            {% for s in sizes %}
+            <option value="{{s.name}}">{{s.name}}</option>
+            {% endfor %}
+        </select>
+
+        <button type="button" onclick="removeRow(this)">❌</button>
+    </div>
+{% endif %}
+
+</div>
+
+<button type="button" class="btn edit" onclick="addSize()">+ ADD</button>
+
+
+<br><br>
+<button class="btn edit">Save</button>
+
+</form>
+
+</div>
+
+<script> 
+
+const sizeList = {{ sizes | map(attribute='name') | list | tojson }};
+let currentColors = [];
+
+function addColor(){
+
+    let row = document.createElement("div");
+    row.className = "color-row";
+
+    let select = document.createElement("select");
+    select.name = "colors[]";
+
+    let defaultOpt = document.createElement("option");
+    defaultOpt.value = "";
+    defaultOpt.textContent = "Select Color";
+    select.appendChild(defaultOpt);
+
+    currentColors.forEach(color => {
+        let opt = document.createElement("option");
+        opt.value = color;
+        opt.textContent = color;
+        select.appendChild(opt);
+    });
+
+    select.onchange = function(){
+        checkColorDuplicate(select);
+    };
+
+    let btn = document.createElement("button");
+    btn.type = "button";
+    btn.innerText = "❌";
+    btn.onclick = function(){
+        removeRow(btn);
+    };
+
+    row.appendChild(select);
+    row.appendChild(btn);
+
+    document.getElementById("colorBox").appendChild(row);
+}
+
+
+function addSize(){
+
+    let row = document.createElement("div");
+    row.className = "size-row";
+
+    let select = document.createElement("select");
+    select.name = "sizes[]";
+
+    select.onchange = function(){
+        checkSizeDuplicate(select);
+    };
+
+    sizeList.forEach(size => {
+        let opt = document.createElement("option");
+        opt.value = size;
+        opt.textContent = size;
+        select.appendChild(opt);
+    });
+
+    let btn = document.createElement("button");
+    btn.type = "button";
+    btn.innerText = "❌";
+    btn.onclick = function(){
+        removeRow(btn);
+    };
+
+    row.appendChild(select);
+    row.appendChild(btn);
+
+    document.getElementById("sizeBox").appendChild(row);
+}
+
+function checkColorDuplicate(select){
+
+    let values = [...document.querySelectorAll('select[name="colors[]"]')]
+                    .map(s => s.value);
+
+    let duplicates = values.filter((v, i, a) => v && a.indexOf(v) !== i);
+
+    if(duplicates.includes(select.value)){
+        alert("Duplicate Color not allowed!");
+        select.value = "";
+        select.focus();
+    }
+}
+
+function checkSizeDuplicate(select){
+
+    let values = [...document.querySelectorAll('select[name="sizes[]"]')]
+                    .map(s => s.value);
+
+    let duplicates = values.filter((v, i, a) => v && a.indexOf(v) !== i);
+
+    if(duplicates.includes(select.value)){
+        alert("Duplicate Size not allowed!");
+        select.value = "";
+        select.focus();
+    }
+}
+
+function removeRow(btn){
+
+    let row = btn.parentElement;
+    let container = row.parentElement;
+
+    if(container.children.length > 1){
+        row.remove();
+    } else {
+        alert("At least one row required!");
+    }
+}
+
+function loadColors(){
+
+    let fabric = document.getElementById("fabric").value;
+
+    fetch(`/get-colors/${encodeURIComponent(fabric)}`)
+    .then(res => res.json())
+    .then(data => {
+
+        currentColors = data;  // 🔥 store globally
+
+        let selects = document.querySelectorAll('select[name="colors[]"]');
+
+        selects.forEach(select => {
+
+            let selected = select.value;
+
+            select.innerHTML = '<option value="">Select Color</option>';
+
+            data.forEach(color => {
+                let opt = document.createElement("option");
+                opt.value = color;
+                opt.textContent = color;
+
+                if(color === selected){
+                    opt.selected = true;
+                }
+
+                select.appendChild(opt);
+            });
+
+        });
+
+    });
+}
+
+
+window.onload = function(){
+
+    loadColors();  // 🔥 IMPORTANT
+
+    setTimeout(() => {
+
+        if(document.querySelectorAll('#colorBox select').length === 0){
+            addColor();
+        }
+
+        if(document.querySelectorAll('#sizeBox select').length === 0){
+            addSize();
+        }
+        document.querySelectorAll('select[name"sizes[]"]').forEach(s => checkSizeDuplicate(s));
+
+    }, 300);
+};
+</script>
+
+</body>
+</html>

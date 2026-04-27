@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Size Master</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<div class="container">
+
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+        <h2>SRINITHI GARMENT</h2>
+
+        <ul>
+            <li><a href="/dashboard">🏠 Dashboard</a></li>
+
+            <li class="menu-title">Cutting</li>
+            <li><a href="/program">📋 Program Entry</a></li>
+            <li><a href="/overall_programs">📊 Overall Programs</a></li>
+
+            <li class="menu-title">Master</li>
+            <li><a href="/colour">🎨 Colour Master</a></li>
+            <li><a href="/size">📏 Size Master</a></li>
+            <li><a href="/fabric">🧵 Fabric Master</a></li>
+            <li><a href="/product">📦 Product Master</a></li>
+
+            <li><a href="/logout">🚪 Logout</a></li>
+        </ul>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div class="main">
+        <h1>Size Master</h1>
+
+        <!-- FORM -->
+        <div class="form-card">
+            <form method="POST">
+                <div class="form-group">
+                    <label>Size</label>
+                    <input type="text" name="size" placeholder="Enter size (S, M, L, XL)" required>
+                </div>
+
+                <button type="submit">Save Size</button>
+            </form>
+        </div>
+
+        <!-- SEARCH -->
+        <div style="margin-top:20px;">
+            <form method="GET">
+                <input type="text" name="search" placeholder="Search size">
+                <button type="submit">Search</button>
+            </form>
+        </div>
+
+        <!-- TABLE -->
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>S.No</th>
+                    <th>Size</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                {% for s in sizes %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td>{{ s.name }}</td>
+                    <td>
+                        <a class="btn edit" href="/edit_size/{{ s.id }}">Edit</a>
+                        <a class="btn delete" href="/delete_size/{{ s.id }}" onclick="return confirm('Delete?')">Delete</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+    </div>
+
+</div>
+
+</body>
+</html>

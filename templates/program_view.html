@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Program View</title>
+<style>
+table {
+    border-collapse: collapse;
+    width: 100%;
+}
+th, td {
+    border: 1px solid #ccc;
+    padding: 8px;
+}
+th {
+    background: #333;
+    color: white;
+}
+</style>
+</head>
+
+<body>
+
+<button type="button" onclick="printPage()">🖨️ Print</button>
+
+<h2>PROGRAM DETAILS</h2>
+
+<table>
+<tr><td><b>Program No</b></td><td>{{ header.program_no }}</td>
+    <td><b>Date</b></td><td>{{ header.date }}</td></tr>
+
+<tr><td><b>Fabric</b></td><td>{{ header.fabric }}</td>
+    <td><b>DIA</b></td><td>{{ header.dia }}</td></tr>
+
+<tr><td><b>Product</b></td><td>{{ header.product }}</td></tr>
+</table>
+
+<br>
+
+<!-- SIZE RATIO -->
+<table>
+<tr>
+    <th>Size</th>
+    {% for size in size_ratio.keys() %}
+    <th>{{ size }}</th>
+    {% endfor %}
+</tr>
+
+<tr>
+    <td><b>Ratio</b></td>
+    {% for val in size_ratio.values() %}
+    <td>{{ val }}</td>
+    {% endfor %}
+</tr>
+</table>
+
+<br>
+
+<!-- COLOUR ROLLS -->
+<table>
+<tr>
+    <th>Colour</th>
+    <th>Rolls</th>
+</tr>
+
+{% for c, r in colour_rolls.items() %}
+<tr>
+    <td>{{ c }}</td>
+    <td>{{ r }}</td>
+</tr>
+{% endfor %}
+
+</table>
+
+<br>
+<a href="/program">⬅ Back</a>
+
+<script>
+function printPage() {
+    window.print();
+}
+</script>
+
+</body>
+</html>

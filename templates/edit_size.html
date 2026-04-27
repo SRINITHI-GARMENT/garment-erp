@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Edit Size</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<div class="main">
+    <h2>Edit Size</h2>
+
+    <form method="POST">
+        <input type="text" name="size" value="{{ size.name }}" required>
+        <button type="submit">Update</button>
+    </form>
+</div>
+
+</body>
+</html>

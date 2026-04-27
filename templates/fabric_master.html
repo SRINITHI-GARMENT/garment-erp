@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Fabric Master</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<div class="container">
+
+<div class="sidebar">
+    <h2>SRINITHI GARMENT</h2>
+
+    <ul>
+        <li><a href="/dashboard">🏠 Dashboard</a></li>
+
+        <li class="menu-title">Cutting</li>
+        <li><a href="/program">📋 Program Entry</a></li>
+        <li><a href="/overall_programs">📊 Overall Programs</a></li>
+
+        <li class="menu-title">Master</li>
+        <li><a href="/colour">🎨 Colour Master</a></li>
+        <li><a href="/size">📏 Size Master</a></li>
+        <li><a href="/fabric">🧵 Fabric Master</a></li>
+        <li><a href="/product">📦 Product Master</a></li>
+
+        <li><a href="/logout">🚪 Logout</a></li>
+    </ul>
+</div>
+
+<div class="main">
+
+<h1>Fabric Master</h1>
+
+<a href="/fabric/new" class="btn edit">+ NEW</a>
+
+<table class="data-table">
+<tr>
+<th>S.No</th>
+<th>Fabric</th>
+<th>UOM</th>
+<th>GSM</th>
+<th>DIA</th>
+<th>Colour</th>
+<th>Action</th>
+</tr>
+
+{% for f in fabrics %}
+<tr>
+<td>{{ loop.index }}</td>
+<td>{{ f.name }}</td>
+<td>{{ f.uom }}</td>
+<td>{{ f.gsm }}</td>
+<td>{{ ", ".join(f.dia) }}</td>
+<td>{{ ", ".join(f.colour) }}</td>
+<td>
+<a class="btn edit" href="/edit_fabric/{{ f.id }}">Edit</a>
+<a class="btn delete" href="/delete_fabric/{{ f.id }}" onclick="return confirm('Delete?')">Delete</a>
+</td>
+</tr>
+{% endfor %}
+
+</table>
+
+</div>
+</div>
+</body>
+</html>
