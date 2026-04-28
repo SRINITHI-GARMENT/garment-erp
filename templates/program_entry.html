@@ -1,264 +1,412 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Product Entry</title>
+<title>Program Entry</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
 
+<div class="container">
+
+<!-- SIDEBAR -->
+<div class="sidebar">
+    <h2>SRINITHI GARMENT</h2>
+
+    <ul>
+        <li><a href="/dashboard">🏠 Dashboard</a></li>
+
+        <li class="menu-title">MASTER</li>
+        <li><a href="/colour">🎨 Colour Master</a></li>
+        <li><a href="/size">📏 Size Master</a></li>
+        <li><a href="/fabric">🧵 Fabric Master</a></li>
+        <li><a href="/product">📦 Product Master</a></li>
+
+        <li class="menu-title">PROGRAM</li>
+        <li><a href="/program">📋 Program Entry</a></li>
+        <li><a href="/overall_programs">📊 Overall Programs</a></li>
+
+        <li><a href="/logout">🚪 Logout</a></li>
+    </ul>
+</div>
+
+<!-- MAIN CONTENT -->
 <div class="main">
 
-<h2>Product Entry</h2>
+<h2>CUTTING PROGRAM ENTRY</h2>
 
-<form method="POST">
-
-<div class="form-card">
-
-<div class="form-group">
-<label>Product</label>
-<input name="name" value="{{ product.name if product else '' }}" required>
-</div>
-
-<div class="form-group">
-<label>Brand</label>
-<input name="brand" value="{{ product.brand if product else '' }}">
-</div>
-
-<div class="form-group">
-<label>Category</label>
-<input name="category" value="{{ product.category if product else '' }}">
-</div>
-
-<div class="form-group">
-<label>Product Type</label>
-<select name="type">
-<option value="Brand" {% if product and product.type == "Brand" %}selected{% endif %}>Brand</option>
-<option value="Production" {% if product and product.type == "Production" %}selected{% endif %}>Production</option>
-</select>
-</div>
-
-</div>
+<form method="POST" class="form-card">
 
 <!-- FABRIC -->
-<h3>Fabric & GSM</h3>
-<select name="fabric" id="fabric" onchange="loadColors()">
+<select name="fabric" id="fabric">
+<option value="">Select Fabric</option>
 {% for f in fabrics %}
-<option value="{{ f.name }} ({{ f.gsm }})"
-{% if product and product.fabric == f.name + " (" + f.gsm + ")" %}selected{% endif %}>
-    {{ f.name }} ({{ f.gsm }})
+<option value="{{ f.name }} ({{ f.gsm }})" data-dia='{{ f.dia | tojson }}'>
+{{ f.name }} ({{ f.gsm }})
 </option>
 {% endfor %}
 </select>
 
-<!-- COLORS -->
-<h3>Colors</h3>
-<div id="colorBox">
+<!-- DIA -->
+<select name="dia" id="dia">
+<option>Select DIA</option>
+</select>
 
-{% if product and product.colors %}
-    {% for selected_color in product.colors %}
-    <div class="color-row">
-        <select name="colors[]" onchange="checkColorDuplicate(this)">
-            <option value="">Select Color</option>
-            {% for c in colours %}
-            <option value="{{ c.name }}"
-            {% if c.name == selected_color %}selected{% endif %}>
-                {{ c.name }}
-            </option>
-            {% endfor %}
-        </select>
+<!-- PRODUCT TYPE -->
+<select name="type" id="type">
+<option value="">Select Type</option>
+<option value="Brand">Brand</option>
+<option value="Production">Production</option>
+</select>
 
-        <button type="button" onclick="removeRow(this)">❌</button>
-    </div>
-    {% endfor %}
-{% else %}
-    <div class="color-row">
-        <select name="colors[]" onchange="checkColorDuplicate(this)">
-            <option value="">Select Color</option>
-            {% for c in colours %}
-            <option value="{{ c.name }}">{{ c.name }}</option>
-            {% endfor %}
-        </select>
+<!-- PRODUCT -->
+<select name="product" id="product">
+<option value="">Select Product</option>
 
-        <button type="button" onclick="removeRow(this)">❌</button>
-    </div>
-{% endif %}
+{% for p in products %}
+<option value="{{ p.name }}"
+data-fabric="{{ p.fabric }}"
+data-type="{{ p.type }}"
+data-sizes='{{ p.sizes | tojson }}'
+data-colors='{{ p.colors | tojson }}'>
+{{ p.name }}
+</option>
+{% endfor %}
+</select>
 
-</div>
+<hr>
 
-<button type="button" class="btn edit" onclick="addColor()">+ ADD</button>
+<h3>SIZE</h3>
+<div id="sizeBox"></div>
+<button type="button" onclick="addSize()">+ ADD</button>
 
-<!-- SIZE -->
-<h3>Size</h3>
-<div id="sizeBox">
-
-{% if product and product.sizes %}
-    {% for selected_size in product.sizes %}
-    <div class="size-row">
-        <select name="sizes[]" onchange="checkSizeDuplicate(this)">
-            {% for s in sizes %}
-            <option value="{{ s.name }}"
-            {% if s.name == selected_size %}selected{% endif %}>
-                {{ s.name }}
-            </option>
-            {% endfor %}
-        </select>
-
-        <button type="button" onclick="removeRow(this)">❌</button>
-    </div>
-    {% endfor %}
-{% else %}
-    <div class="size-row">
-        <select name="sizes[]">
-            {% for s in sizes %}
-            <option value="{{ s.name }}">{{ s.name }}</option>
-            {% endfor %}
-        </select>
-
-        <button type="button" onclick="removeRow(this)">❌</button>
-    </div>
-{% endif %}
-
-</div>
-
-<button type="button" class="btn edit" onclick="addSize()">+ ADD</button>
-
+<h3>COLOUR</h3>
+<div id="colorBox"></div>
+<button type="button" onclick="addColor()">+ ADD</button>
 
 <br><br>
-<button class="btn edit">Save</button>
+<button type="submit">Save Program</button>
 
 </form>
 
+<hr>
+
+<h3>REPORT</h3>
+
+<div class="filter-box">
+
+<input type="text" id="filterProgram" placeholder="Program No">
+<input type="text" id="filterFabric" placeholder="Fabric">
+<input type="text" id="filterProduct" placeholder="Product">
+
+<input type="date" id="fromDate">
+<input type="date" id="toDate">
+
+<select id="filterStatus">
+<option value="">All Status</option>
+<option value="pending">Pending</option>
+<option value="completed">DONE</option>
+</select>
+
+</div>
+
+<table class="data-table">
+<thead>
+<tr>
+<th>Program No</th>
+<th>Date</th>
+<th>Fabric</th>
+<th>DIA</th>
+<th>Type</th>
+<th>Product</th>
+<th>Colour</th>
+<th>Size</th>
+<th>Ratio</th>
+<th>Rolls</th>
+<th>Status</th>
+<th>Action</th>
+</tr>
+</thead>
+
+<tbody>
+{% for p in programs %}
+<tr>
+<td>
+<a href="/program/{{ p.program_no }}">
+{{ p.program_no }}
+</a>
+</td>
+<td>{{ p.date }}</td>
+<td>{{ p.fabric }}</td>
+<td>{{ p.dia }}</td>
+<td>{{ p.type }}</td>
+<td>{{ p.product }}</td>
+<td>{{ p.color }}</td>
+<td>{{ p.size }}</td>
+<td>{{ p.ratio }}</td>
+<td>{{ p.rolls }}</td>
+<td>{{ p.status }}</td>
+<td>
+<a href="/edit_program/{{ p.id }}">EDIT</a> |
+<a href="/delete_program/{{ p.id }}" onclick="return confirm('Delete?')">DELETE</a>
+</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+
+</div>
 </div>
 
 <script>
 
-const sizeList = {{ sizes | map(attribute='name') | list | tojson }};
-let currentColors = [];
+let selectedSizes = [];
+let selectedColors = [];
+
+function filterProduct(){
+    let fabric = document.getElementById("fabric").value;
+    let type = document.getElementById("type").value;
+
+    let productDropdown = document.getElementById("product");
+    let options = productDropdown.querySelectorAll("option");
+
+    productDropdown.value = "";
+
+    options.forEach(opt => {
+        if(!opt.value) return;
+        let matchFabric = (fabric === "" || opt.dataset.fabric === fabric);
+        let matchType = (type === "" || opt.dataset.type === type);
+        opt.style.display = (matchFabric && matchType) ? "" : "none";
+    });
+}
+
+document.getElementById("fabric").addEventListener("change", function(){
+    let diaDropdown = document.getElementById("dia");
+    diaDropdown.innerHTML = "<option>Select DIA</option>";
+
+    let selected = this.options[this.selectedIndex];
+    if(selected && selected.getAttribute("data-dia")){
+        let diaList = JSON.parse(selected.getAttribute("data-dia"));
+        diaList.forEach(d=>{
+            let opt = document.createElement("option");
+            opt.value = d;
+            opt.textContent = d;
+            diaDropdown.appendChild(opt);
+        });
+    }
+
+    filterProduct();
+    document.getElementById("product").value = "";
+    document.getElementById("type").value = "";
+    document.getElementById("sizeBox").innerHTML = "";
+    document.getElementById("colorBox").innerHTML = "";
+});
+
+document.getElementById("type").addEventListener("change", function(){
+    filterProduct();
+    document.getElementById("product").value = "";
+});
+
+document.getElementById("product").addEventListener("change", function(){
+    let selected = this.options[this.selectedIndex];
+
+    if(!selected.value){
+        selectedSizes = [];
+        selectedColors = [];
+        return;
+    }
+
+    document.getElementById("type").value =
+        selected.getAttribute("data-type") || "";
+
+    selectedSizes = JSON.parse(selected.getAttribute("data-sizes") || "[]");
+    selectedColors = JSON.parse(selected.getAttribute("data-colors") || "[]");
+});
+
+function addSize(){
+    if(selectedSizes.length === 0){
+        alert("Select Product First!");
+        return;
+    }
+
+    let div = document.createElement("div");
+
+    let select = document.createElement("select");
+    select.name = "sizes[]";
+
+    let existing = Array.from(
+        document.querySelectorAll("select[name='sizes[]']")
+    ).map(s => s.value);
+
+    selectedSizes.forEach(s=>{
+        if(!existing.includes(s)){
+            let opt = document.createElement("option");
+            opt.value = s;
+            opt.textContent = s;
+            select.appendChild(opt);
+        }
+    });
+
+    let input = document.createElement("input");
+    input.name = "ratios[]";
+    input.placeholder = "Ratio";
+
+    let removeBtn = document.createElement("button");
+    removeBtn.type = "button";
+    removeBtn.innerText = "X";
+    removeBtn.onclick = () => div.remove();
+
+    if(select.options.length === 0){
+        alert("All sizes already added!");
+        return;
+    }
+
+    div.appendChild(select);
+    div.appendChild(input);
+    div.appendChild(removeBtn);
+
+    document.getElementById("sizeBox").appendChild(div);
+}
 
 function addColor(){
-    let row = document.createElement("div");
-    row.className = "color-row";
+    if(selectedColors.length === 0){
+        alert("Select Product First!");
+        return;
+    }
+
+    let div = document.createElement("div");
 
     let select = document.createElement("select");
     select.name = "colors[]";
 
-    let defaultOpt = document.createElement("option");
-    defaultOpt.value = "";
-    defaultOpt.textContent = "Select Color";
-    select.appendChild(defaultOpt);
+    let existing = Array.from(
+        document.querySelectorAll("select[name='colors[]']")
+    ).map(c => c.value);
 
-    currentColors.forEach(color => {
-        let opt = document.createElement("option");
-        opt.value = color;
-        opt.textContent = color;
-        select.appendChild(opt);
+    selectedColors.forEach(c=>{
+        if(!existing.includes(c)){
+            let opt = document.createElement("option");
+            opt.value = c;
+            opt.textContent = c;
+            select.appendChild(opt);
+        }
     });
 
-    select.onchange = function(){ checkColorDuplicate(select); };
+    let input = document.createElement("input");
+    input.name = "rolls[]";
+    input.placeholder = "Rolls";
 
-    let btn = document.createElement("button");
-    btn.type = "button";
-    btn.innerText = "❌";
-    btn.onclick = function(){ removeRow(btn); };
+    let removeBtn = document.createElement("button");
+    removeBtn.type = "button";
+    removeBtn.innerText = "X";
+    removeBtn.onclick = () => div.remove();
 
-    row.appendChild(select);
-    row.appendChild(btn);
-    document.getElementById("colorBox").appendChild(row);
-}
-
-function addSize(){
-    let row = document.createElement("div");
-    row.className = "size-row";
-
-    let select = document.createElement("select");
-    select.name = "sizes[]";
-    select.onchange = function(){ checkSizeDuplicate(select); };
-
-    sizeList.forEach(size => {
-        let opt = document.createElement("option");
-        opt.value = size;
-        opt.textContent = size;
-        select.appendChild(opt);
-    });
-
-    let btn = document.createElement("button");
-    btn.type = "button";
-    btn.innerText = "❌";
-    btn.onclick = function(){ removeRow(btn); };
-
-    row.appendChild(select);
-    row.appendChild(btn);
-    document.getElementById("sizeBox").appendChild(row);
-}
-
-function checkColorDuplicate(select){
-    let values = [...document.querySelectorAll('select[name="colors[]"]')]
-                    .map(s => s.value);
-    let duplicates = values.filter((v, i, a) => v && a.indexOf(v) !== i);
-    if(duplicates.includes(select.value)){
-        alert("Duplicate Color not allowed!");
-        select.value = "";
-        select.focus();
+    if(select.options.length === 0){
+        alert("All colours already added!");
+        return;
     }
+
+    div.appendChild(select);
+    div.appendChild(input);
+    div.appendChild(removeBtn);
+
+    document.getElementById("colorBox").appendChild(div);
 }
 
-function checkSizeDuplicate(select){
-    let values = [...document.querySelectorAll('select[name="sizes[]"]')]
-                    .map(s => s.value);
-    let duplicates = values.filter((v, i, a) => v && a.indexOf(v) !== i);
-    if(duplicates.includes(select.value)){
-        alert("Duplicate Size not allowed!");
-        select.value = "";
-        select.focus();
-    }
-}
-
-function removeRow(btn){
-    let row = btn.parentElement;
-    let container = row.parentElement;
-    if(container.children.length > 1){
-        row.remove();
-    } else {
-        alert("At least one row required!");
-    }
-}
-
-function loadColors(){
+document.querySelector("form").addEventListener("submit", function(e){
     let fabric = document.getElementById("fabric").value;
+    let product = document.getElementById("product").value;
 
-    fetch(`/get-colors/${encodeURIComponent(fabric)}`)
-    .then(res => res.json())
-    .then(data => {
-        currentColors = data;
+    if(!fabric || !product){
+        alert("Please select Fabric & Product");
+        e.preventDefault();
+    }
+});
 
-        let selects = document.querySelectorAll('select[name="colors[]"]');
-        selects.forEach(select => {
-            let selected = select.value;
-            select.innerHTML = '<option value="">Select Color</option>';
+</script>
 
-            data.forEach(color => {
-                let opt = document.createElement("option");
-                opt.value = color;
-                opt.textContent = color;
-                if(color === selected){ opt.selected = true; }
-                select.appendChild(opt);
-            });
-        });
+<script>
+
+let filters = {
+    program: "",
+    fabric: "",
+    product: "",
+    status: "",
+    fromDate: "",
+    toDate: ""
+};
+
+function parseDate(dateStr){
+    if(!dateStr) return null;
+    let parts = dateStr.split("-");
+    return new Date(parts[2], parts[1]-1, parts[0]);
+}
+
+function applyFilter(){
+    let rows = document.querySelectorAll(".data-table tbody tr");
+
+    rows.forEach(row => {
+        let cols = row.children;
+
+        let program = cols[0].innerText.toLowerCase();
+        let fabric  = cols[2].innerText.toLowerCase();
+        let product = cols[5].innerText.toLowerCase();
+        let status  = cols[10].innerText.toLowerCase();
+
+        let rowDateText = cols[1].innerText;
+        let rowDate = parseDate(rowDateText);
+
+        let from = filters.fromDate ? new Date(filters.fromDate) : null;
+        let to   = filters.toDate ? new Date(filters.toDate) : null;
+
+        let matchDate = true;
+
+        if(from){ from.setHours(0,0,0,0); }
+        if(to){ to.setHours(23,59,59,999); }
+
+        if(from && rowDate && rowDate < from) matchDate = false;
+        if(to && rowDate && rowDate > to) matchDate = false;
+
+        let show =
+            program.includes(filters.program) &&
+            fabric.includes(filters.fabric) &&
+            product.includes(filters.product) &&
+            status.includes(filters.status) &&
+            matchDate;
+
+        row.style.display = show ? "" : "none";
     });
 }
 
-window.onload = function(){
-    loadColors();
+document.getElementById("filterProgram").addEventListener("keyup", function(){
+    filters.program = this.value.toLowerCase();
+    applyFilter();
+});
 
-    setTimeout(() => {
-        if(document.querySelectorAll('#colorBox select').length === 0){
-            addColor();
-        }
-        if(document.querySelectorAll('#sizeBox select').length === 0){
-            addSize();
-        }
-    }, 300);
-};
+document.getElementById("filterFabric").addEventListener("keyup", function(){
+    filters.fabric = this.value.toLowerCase();
+    applyFilter();
+});
+
+document.getElementById("filterProduct").addEventListener("keyup", function(){
+    filters.product = this.value.toLowerCase();
+    applyFilter();
+});
+
+document.getElementById("filterStatus").addEventListener("change", function(){
+    filters.status = this.value.toLowerCase();
+    applyFilter();
+});
+
+document.getElementById("fromDate").addEventListener("change", function(){
+    filters.fromDate = this.value;
+    applyFilter();
+});
+
+document.getElementById("toDate").addEventListener("change", function(){
+    filters.toDate = this.value;
+    applyFilter();
+});
+
 </script>
 
 </body>

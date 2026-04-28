@@ -71,6 +71,8 @@ h1 {
 
 <h1>ALL PROGRAMS</h1>
 
+<button onclick="exportToExcel()">Export to Excel</button>
+
 <div class="filter-box">
 
 <input type="text" id="filterProgram" placeholder="Program No">
@@ -83,7 +85,7 @@ h1 {
 <select id="filterStatus">
 <option value="">All Status</option>
 <option value="pending">Pending</option>
-<option value="completed">DONE</option>
+<option value="completed">completed</option>
 </select>
 
 </div>
@@ -122,7 +124,13 @@ h1 {
 <td>{{ p.size }}</td>
 <td>{{ p.ratio }}</td>
 <td>{{ p.rolls }}</td>
-<td>{{ p.status }}</td>
+<td>
+    <form method="POST" action="/edit_program/{{p.id}}">
+        <select name="status" onchange="this.form.submit()">
+            <option value="pending" {% if p.status == 'pending' %}selected{% endif %}>pending</option>
+            <option value="completed" {% if p.status == 'completed' %}selected{% endif %}>completed</option>
+        </select>
+</td>
 </tr>
 {% endfor %}
 </tbody>
@@ -211,6 +219,59 @@ document.getElementById("toDate").addEventListener("change", function(){
     applyFilter();
 });
 
+
+function exportToExcel() {
+
+    let table = document.querySelector(".data-table");
+    let rows = table.querySelectorAll("tbody tr");
+
+    let data = [];
+
+    // Header
+    let headers = [];
+    table.querySelectorAll("thead th").forEach(th => {
+        headers.push(th.innerText);
+    });
+    data.push(headers);
+
+    // Rows (ONLY visible rows after filter)
+    rows.forEach(row => {
+        if (row.style.display !== "none") {
+
+            let cols = row.querySelectorAll("td");
+            let rowData = [];
+
+            cols.forEach((td, index) => {
+
+                // Handle status dropdown
+                if(index === 10){
+                    let val = td.querySelector("select").value;
+                    rowData.push(val);
+                } else {
+                    rowData.push(td.innerText);
+                }
+
+            });
+
+            data.push(rowData);
+        }
+    });
+
+    // Convert to Excel format
+    let csvContent = "";
+
+    data.forEach(row => {
+        csvContent += row.join(",") + "\n";
+    });
+
+    // Download file
+    let blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    let link = document.createElement("a");
+
+    link.href = URL.createObjectURL(blob);
+    link.download = "fabric_audit.csv";
+    link.click();
+}
 </script>
 
 </body>
