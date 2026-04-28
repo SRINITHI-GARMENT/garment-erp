@@ -9,10 +9,11 @@ from flask_sqlalchemy import SQLAlchemy
 app = Flask(__name__)
 
 # ---------------- DB CONFIG ----------------
-# Default: SQLite file (app.db). Override by setting DATABASE_URL env var, e.g.:
-#   PostgreSQL : postgresql+psycopg2://user:pass@host:5432/dbname
-#   MySQL      : mysql+pymysql://user:pass@host:3306/dbname
-app.config["SQLALCHEMY_DATABASE_URI"] = "postgresql+psycopg2://postgres.cusbryojwnldabchhfkx:9788%40Srinithi@aws-1-ap-northeast-1.pooler.supabase.com:6543/postgres"
+# IMPORTANT: set DATABASE_URL in Render -> Environment, do NOT hardcode credentials.
+app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
+    "DATABASE_URL",
+    "sqlite:///app.db",  # local fallback
+)
 app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
     "pool_pre_ping": True,
     "pool_recycle": 300,
@@ -45,7 +46,6 @@ class Fabric(db.Model):
     name = db.Column(db.String(120), nullable=False)
     uom = db.Column(db.String(50), nullable=False)
     gsm = db.Column(db.String(50), nullable=False)
-    # Stored as comma-separated values to keep schema simple
     dia_csv = db.Column(db.Text, default="")
     colour_csv = db.Column(db.Text, default="")
 
@@ -107,7 +107,7 @@ class Program(db.Model):
     size = db.Column(db.String(50), nullable=False)
     ratio = db.Column(db.String(50), nullable=False)
     rolls = db.Column(db.String(50), nullable=False)
-    status = db.Column(db.String(20), default="PENDING")
+    status = db.Column(db.String(20), default="pending")
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
 
 
@@ -283,18 +283,10 @@ def fabric_new():
 @app.route("/get-colors/<fabric_value>")
 def get_colors(fabric_value):
     fabric_value = fabric_value.strip()
-
-    print("======== API CALLED ========")
-    print("Requested:", fabric_value)
-
     for f in Fabric.query.all():
         full_name = f"{f.name.strip()} ({str(f.gsm).strip()})"
-        print("Checking:", full_name)
         if full_name == fabric_value:
-            print("MATCH FOUND:", f.colour)
             return jsonify(f.colour)
-
-    print("NO MATCH")
     return jsonify([])
 
 
@@ -416,7 +408,6 @@ def program():
         program_no = _next_program_no()
         today = datetime.now().strftime("%d-%m-%Y")
 
-        # FLATTEN DATA
         for i in range(len(colors)):
             for j in range(len(sizes_in)):
                 row = Program(
@@ -431,7 +422,7 @@ def program():
                     size=sizes_in[j],
                     ratio=ratios[j],
                     rolls=rolls[i],
-                    status="PENDING",
+                    status="pending",
                 )
                 db.session.add(row)
         db.session.commit()
@@ -505,17 +496,34 @@ def delete_program(id):
     return redirect("/program")
 
 
+# ---------------- EDIT PROGRAM (FIXED) ----------------
+# The inline status dropdown on overall_programs.html only sends `status`.
+# The full edit form on edit_program.html sends `ratio`, `rolls`, and `status`.
+# Use .get() with defaults so both work, and only update fields that were sent.
 @app.route("/edit_program/<id>", methods=["GET", "POST"])
 def edit_program(id):
     row = Program.query.get(id)
     if not row:
-        return "Not Found"
+        return "Not Found", 404
 
     if request.method == "POST":
-        row.ratio = request.form["ratio"]
-        row.rolls = request.form["rolls"]
-        row.status = request.form["status"]
+        # Only update fields that were actually submitted
+        if "ratio" in request.form:
+            row.ratio = request.form.get("ratio", row.ratio)
+        if "rolls" in request.form:
+            row.rolls = request.form.get("rolls", row.rolls)
+        if "status" in request.form:
+            new_status = (request.form.get("status") or "").strip().lower()
+            if new_status in ("pending", "completed"):
+                row.status = new_status
+
         db.session.commit()
+
+        # If the request came from the overall list (inline dropdown),
+        # send the user back there instead of the program entry page.
+        referer = request.headers.get("Referer", "")
+        if "/overall_programs" in referer:
+            return redirect("/overall_programs")
         return redirect("/program")
 
     p = {

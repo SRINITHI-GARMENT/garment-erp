@@ -109,6 +109,7 @@ h1 {
 
 <tbody>
 {% for p in programs %}
+{% set s = (p.status or '')|lower %}
 <tr>
 <td>
 <a href="/program/{{ p.program_no }}">
@@ -126,11 +127,9 @@ h1 {
 <td>{{ p.rolls }}</td>
 <td>
     <form method="POST" action="/edit_program/{{ p.id }}">
-        {# Remove the next line if you are NOT using Flask-WTF / CSRFProtect #}
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <select name="status" onchange="this.form.submit()">
-            <option value="pending"   {% if p.status == 'pending'   %}selected{% endif %}>pending</option>
-            <option value="completed" {% if p.status == 'completed' %}selected{% endif %}>completed</option>
+            <option value="pending"   {% if s == 'pending'   %}selected{% endif %}>pending</option>
+            <option value="completed" {% if s == 'completed' %}selected{% endif %}>completed</option>
         </select>
     </form>
 </td>
@@ -251,15 +250,12 @@ function exportToExcel() {
             let rowData = [];
 
             cols.forEach((td, index) => {
-
-                // Handle status dropdown
                 if(index === 10){
                     let sel = td.querySelector("select");
                     rowData.push(sel ? sel.value : "");
                 } else {
                     rowData.push(td.innerText.trim());
                 }
-
             });
 
             data.push(rowData);
