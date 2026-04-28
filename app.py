@@ -2,16 +2,17 @@ import os
 import uuid
 from datetime import datetime
 from collections import defaultdict
+from functools import wraps
 
-from flask import Flask, render_template, request, redirect, jsonify
+from flask import (
+    Flask, render_template, request, redirect, jsonify, session
+)
 from flask_sqlalchemy import SQLAlchemy
+from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
 
 # ---------------- DB CONFIG ----------------
-# Prefer DATABASE_URL env var (set this in Render -> Environment).
-# The hardcoded URL below is only a fallback so the app keeps working
-# until you move the credentials into the env var.
 app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
     "DATABASE_URL",
     "postgresql+psycopg2://postgres.cusbryojwnldabchhfkx:9788%40Srinithi@aws-1-ap-northeast-1.pooler.supabase.com:6543/postgres",
@@ -21,14 +22,27 @@ app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
     "pool_recycle": 300,
 }
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-app.secret_key = os.environ.get("SESSION_SECRET", "dev-secret")
+app.secret_key = os.environ.get("SESSION_SECRET", "dev-secret-change-me")
 
 db = SQLAlchemy(app)
 
-USER = {"admin": "1234"}
-
 
 # ---------------- MODELS ----------------
+class User(db.Model):
+    __tablename__ = "users"
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    password_hash = db.Column(db.String(255), nullable=False)
+    role = db.Column(db.String(20), default="user", nullable=False)  # 'admin' or 'user'
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def set_password(self, raw):
+        self.password_hash = generate_password_hash(raw)
+
+    def check_password(self, raw):
+        return check_password_hash(self.password_hash, raw)
+
+
 class Colour(db.Model):
     __tablename__ = "colours"
     id = db.Column(db.Integer, primary_key=True)
@@ -119,7 +133,44 @@ class Counter(db.Model):
     value = db.Column(db.Integer, default=0)
 
 
-# ---------------- HELPERS ----------------
+# ---------------- AUTH HELPERS ----------------
+def current_user():
+    uid = session.get("user_id")
+    if not uid:
+        return None
+    return User.query.get(uid)
+
+
+def login_required(view):
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        if not current_user():
+            return redirect("/")
+        return view(*args, **kwargs)
+    return wrapped
+
+
+def role_required(*roles):
+    def decorator(view):
+        @wraps(view)
+        def wrapped(*args, **kwargs):
+            u = current_user()
+            if not u:
+                return redirect("/")
+            if u.role not in roles:
+                return "Access denied: you don't have permission for this page.", 403
+            return view(*args, **kwargs)
+        return wrapped
+    return decorator
+
+
+@app.context_processor
+def inject_user():
+    """Make `current_user` available inside every template."""
+    return {"current_user": current_user()}
+
+
+# ---------------- DICT HELPERS ----------------
 def _to_dict_colour(c):
     return {"id": c.id, "name": c.name, "code": c.code}
 
@@ -130,25 +181,15 @@ def _to_dict_size(s):
 
 def _to_dict_fabric(f):
     return {
-        "id": f.id,
-        "name": f.name,
-        "uom": f.uom,
-        "gsm": f.gsm,
-        "dia": f.dia,
-        "colour": f.colour,
+        "id": f.id, "name": f.name, "uom": f.uom, "gsm": f.gsm,
+        "dia": f.dia, "colour": f.colour,
     }
 
 
 def _to_dict_product(p):
     return {
-        "id": p.id,
-        "name": p.name,
-        "brand": p.brand,
-        "category": p.category,
-        "type": p.type,
-        "fabric": p.fabric,
-        "colors": p.colors,
-        "sizes": p.sizes,
+        "id": p.id, "name": p.name, "brand": p.brand, "category": p.category,
+        "type": p.type, "fabric": p.fabric, "colors": p.colors, "sizes": p.sizes,
     }
 
 
@@ -163,10 +204,6 @@ def _next_program_no():
 
 
 def _grouped_programs():
-    """
-    Group all Program rows by (program_no, color).
-    Sizes are joined as 'L:S' and ratios as '1:3', mirroring the desired report.
-    """
     rows = (
         Program.query
         .order_by(Program.created_at.desc(), Program.program_no, Program.color)
@@ -179,18 +216,10 @@ def _grouped_programs():
         key = (r.program_no, r.color)
         if key not in groups:
             groups[key] = {
-                "ids": [],
-                "program_no": r.program_no,
-                "date": r.date,
-                "fabric": r.fabric,
-                "dia": r.dia,
-                "type": r.type,
-                "product": r.product,
-                "color": r.color,
-                "sizes": [],
-                "ratios": [],
-                "rolls": r.rolls,
-                "statuses": [],
+                "ids": [], "program_no": r.program_no, "date": r.date,
+                "fabric": r.fabric, "dia": r.dia, "type": r.type,
+                "product": r.product, "color": r.color,
+                "sizes": [], "ratios": [], "rolls": r.rolls, "statuses": [],
             }
             order.append(key)
         groups[key]["ids"].append(r.id)
@@ -220,37 +249,126 @@ def _grouped_programs():
     return out
 
 
-# ---------------- LOGIN ----------------
+# ---------------- LOGIN / LOGOUT ----------------
 @app.route("/", methods=["GET", "POST"])
 def login():
     error = None
     if request.method == "POST":
-        u = request.form["username"]
-        p = request.form["password"]
-        if u in USER and USER[u] == p:
+        u_name = (request.form.get("username") or "").strip()
+        p = request.form.get("password") or ""
+        user = User.query.filter_by(username=u_name).first()
+        if user and user.check_password(p):
+            session.clear()
+            session["user_id"] = user.id
+            session["username"] = user.username
+            session["role"] = user.role
             return redirect("/dashboard")
-        else:
-            error = "Invalid Login"
+        error = "Invalid username or password"
     return render_template("login.html", error=error)
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect("/")
+
+
+# ---------------- USER MASTER (admin only) ----------------
+@app.route("/users")
+@role_required("admin")
+def users():
+    all_users = User.query.order_by(User.id).all()
+    return render_template("user_master.html", users=all_users)
+
+
+@app.route("/users/new", methods=["GET", "POST"])
+@role_required("admin")
+def user_new():
+    error = None
+    if request.method == "POST":
+        username = (request.form.get("username") or "").strip()
+        password = request.form.get("password") or ""
+        role = (request.form.get("role") or "user").strip().lower()
+        if role not in ("admin", "user"):
+            role = "user"
+        if not username or not password:
+            error = "Username and password are required."
+        elif User.query.filter_by(username=username).first():
+            error = f"Username '{username}' already exists."
+        else:
+            u = User(username=username, role=role)
+            u.set_password(password)
+            db.session.add(u)
+            db.session.commit()
+            return redirect("/users")
+    return render_template("user_form.html", user=None, error=error)
+
+
+@app.route("/edit_user/<int:user_id>", methods=["GET", "POST"])
+@role_required("admin")
+def edit_user(user_id):
+    u = User.query.get_or_404(user_id)
+    error = None
+    if request.method == "POST":
+        new_username = (request.form.get("username") or "").strip()
+        new_password = request.form.get("password") or ""
+        new_role = (request.form.get("role") or u.role).strip().lower()
+
+        if new_username and new_username != u.username:
+            if User.query.filter_by(username=new_username).first():
+                error = f"Username '{new_username}' already exists."
+            else:
+                u.username = new_username
+
+        if not error:
+            if new_role in ("admin", "user"):
+                # Don't allow demoting yourself out of admin (lock-out safety)
+                me = current_user()
+                if me and me.id == u.id and new_role != "admin":
+                    error = "You can't change your own role from admin."
+                else:
+                    u.role = new_role
+
+        if not error and new_password:
+            u.set_password(new_password)
+
+        if not error:
+            db.session.commit()
+            return redirect("/users")
+
+    return render_template("user_form.html", user=u, error=error)
+
+
+@app.route("/delete_user/<int:user_id>")
+@role_required("admin")
+def delete_user(user_id):
+    me = current_user()
+    if me and me.id == user_id:
+        return "You cannot delete your own account.", 400
+    u = User.query.get(user_id)
+    if u:
+        db.session.delete(u)
+        db.session.commit()
+    return redirect("/users")
 
 
 # ---------------- DASHBOARD ----------------
 @app.route("/dashboard")
+@login_required
 def dashboard():
     return render_template("dashboard.html")
 
 
-# ---------------- COLOUR ----------------
+# ---------------- COLOUR (admin only) ----------------
 @app.route("/colour", methods=["GET", "POST"])
+@role_required("admin")
 def colour():
     search = request.args.get("search", "")
-
     if request.method == "POST":
         c = Colour(name=request.form["colour"], code=request.form["code"])
         db.session.add(c)
         db.session.commit()
         return redirect("/colour")
-
     query = Colour.query
     if search:
         query = query.filter(Colour.name.ilike(f"%{search}%"))
@@ -259,6 +377,7 @@ def colour():
 
 
 @app.route("/delete_colour/<int:index>")
+@role_required("admin")
 def delete_colour(index):
     c = Colour.query.get(index)
     if c:
@@ -268,6 +387,7 @@ def delete_colour(index):
 
 
 @app.route("/edit_colour/<int:index>", methods=["GET", "POST"])
+@role_required("admin")
 def edit_colour(index):
     c = Colour.query.get_or_404(index)
     if request.method == "POST":
@@ -278,17 +398,16 @@ def edit_colour(index):
     return render_template("edit_colour.html", colour=_to_dict_colour(c), index=c.id)
 
 
-# ---------------- SIZE ----------------
+# ---------------- SIZE (admin only) ----------------
 @app.route("/size", methods=["GET", "POST"])
+@role_required("admin")
 def size():
     search = request.args.get("search", "")
-
     if request.method == "POST":
         s = Size(name=request.form["size"])
         db.session.add(s)
         db.session.commit()
         return redirect("/size")
-
     query = Size.query
     if search:
         query = query.filter(Size.name.ilike(f"%{search}%"))
@@ -297,6 +416,7 @@ def size():
 
 
 @app.route("/delete_size/<int:index>")
+@role_required("admin")
 def delete_size(index):
     s = Size.query.get(index)
     if s:
@@ -306,6 +426,7 @@ def delete_size(index):
 
 
 @app.route("/edit_size/<int:index>", methods=["GET", "POST"])
+@role_required("admin")
 def edit_size(index):
     s = Size.query.get_or_404(index)
     if request.method == "POST":
@@ -315,14 +436,16 @@ def edit_size(index):
     return render_template("edit_size.html", size=_to_dict_size(s), index=s.id)
 
 
-# ---------------- FABRIC MASTER ----------------
+# ---------------- FABRIC MASTER (admin only) ----------------
 @app.route("/fabric")
+@role_required("admin")
 def fabric_list():
     fabrics = [_to_dict_fabric(f) for f in Fabric.query.order_by(Fabric.id).all()]
     return render_template("fabric_master.html", fabrics=fabrics)
 
 
 @app.route("/fabric/new", methods=["GET", "POST"])
+@role_required("admin")
 def fabric_new():
     if request.method == "POST":
         f = Fabric(
@@ -335,12 +458,12 @@ def fabric_new():
         db.session.add(f)
         db.session.commit()
         return redirect("/fabric")
-
     colours = [_to_dict_colour(c) for c in Colour.query.order_by(Colour.id).all()]
     return render_template("fabric_form.html", colours=colours)
 
 
 @app.route("/get-colors/<fabric_value>")
+@login_required
 def get_colors(fabric_value):
     fabric_value = fabric_value.strip()
     for f in Fabric.query.all():
@@ -351,6 +474,7 @@ def get_colors(fabric_value):
 
 
 @app.route("/edit_fabric/<int:index>", methods=["GET", "POST"])
+@role_required("admin")
 def edit_fabric(index):
     f = Fabric.query.get_or_404(index)
     if request.method == "POST":
@@ -361,7 +485,6 @@ def edit_fabric(index):
         f.colour = request.form.getlist("colour[]")
         db.session.commit()
         return redirect("/fabric")
-
     colours = [_to_dict_colour(c) for c in Colour.query.order_by(Colour.id).all()]
     return render_template(
         "fabric_form.html", fabric=_to_dict_fabric(f), colours=colours
@@ -369,6 +492,7 @@ def edit_fabric(index):
 
 
 @app.route("/delete_fabric/<int:index>")
+@role_required("admin")
 def delete_fabric(index):
     f = Fabric.query.get(index)
     if f:
@@ -377,8 +501,9 @@ def delete_fabric(index):
     return redirect("/fabric")
 
 
-# ---------------- PRODUCT MASTER ----------------
+# ---------------- PRODUCT MASTER (admin only) ----------------
 @app.route("/product")
+@role_required("admin")
 def product_list():
     search = request.args.get("search", "")
     query = Product.query
@@ -389,6 +514,7 @@ def product_list():
 
 
 @app.route("/product/new", methods=["GET", "POST"])
+@role_required("admin")
 def product_new():
     if request.method == "POST":
         p = Product(
@@ -403,7 +529,6 @@ def product_new():
         db.session.add(p)
         db.session.commit()
         return redirect("/product")
-
     return render_template(
         "product_form.html",
         colours=[_to_dict_colour(c) for c in Colour.query.order_by(Colour.id).all()],
@@ -413,6 +538,7 @@ def product_new():
 
 
 @app.route("/edit_product/<int:index>", methods=["GET", "POST"])
+@role_required("admin")
 def edit_product(index):
     p = Product.query.get_or_404(index)
     if request.method == "POST":
@@ -425,7 +551,6 @@ def edit_product(index):
         p.sizes = [s for s in request.form.getlist("sizes[]") if s]
         db.session.commit()
         return redirect("/product")
-
     return render_template(
         "product_form.html",
         product=_to_dict_product(p),
@@ -436,6 +561,7 @@ def edit_product(index):
 
 
 @app.route("/delete_product/<int:index>")
+@role_required("admin")
 def delete_product(index):
     p = Product.query.get(index)
     if p:
@@ -446,6 +572,7 @@ def delete_product(index):
 
 # ---------------- PROGRAM ENTRY ----------------
 @app.route("/program", methods=["GET", "POST"])
+@login_required
 def program():
     if request.method == "POST":
         fabric = request.form.get("fabric")
@@ -497,41 +624,31 @@ def program():
 
 
 @app.route("/program/<program_no>")
+@login_required
 def view_program(program_no):
     data = Program.query.filter_by(program_no=program_no).all()
     if not data:
         return "No Data Found"
-
     first = data[0]
     header = {
-        "program_no": first.program_no,
-        "date": first.date,
-        "fabric": first.fabric,
-        "dia": first.dia,
-        "type": first.type,
-        "product": first.product,
+        "program_no": first.program_no, "date": first.date, "fabric": first.fabric,
+        "dia": first.dia, "type": first.type, "product": first.product,
     }
-
-    size_ratio = {}
-    for row in data:
-        size_ratio[row.size] = row.ratio
-
+    size_ratio = {row.size: row.ratio for row in data}
     colour_rolls = defaultdict(int)
     for row in data:
         try:
             colour_rolls[row.color] += int(row.rolls)
         except (TypeError, ValueError):
             pass
-
     return render_template(
         "program_view.html",
-        header=header,
-        size_ratio=size_ratio,
-        colour_rolls=colour_rolls,
+        header=header, size_ratio=size_ratio, colour_rolls=colour_rolls,
     )
 
 
 @app.route("/delete_program/<id>")
+@role_required("admin")
 def delete_program(id):
     row = Program.query.get(id)
     if row:
@@ -541,8 +658,8 @@ def delete_program(id):
 
 
 @app.route("/delete_program_group")
+@role_required("admin")
 def delete_program_group():
-    """Delete all underlying size-rows for a (program_no, color) group."""
     ids_csv = request.args.get("ids", "")
     ids = [i for i in ids_csv.split(",") if i]
     for pid in ids:
@@ -554,12 +671,8 @@ def delete_program_group():
 
 
 @app.route("/edit_program/<id>", methods=["GET", "POST"])
+@role_required("admin")
 def edit_program(id):
-    """
-    Single-row edit. The inline status dropdown on overall_programs.html only
-    sends `status`; the full edit form on edit_program.html sends ratio/rolls/status.
-    Use .get() so both work and only update fields that were actually sent.
-    """
     row = Program.query.get(id)
     if not row:
         return "Not Found", 404
@@ -573,39 +686,29 @@ def edit_program(id):
             new_status = (request.form.get("status") or "").strip().lower()
             if new_status in ("pending", "completed"):
                 row.status = new_status
-
         db.session.commit()
-
         referer = request.headers.get("Referer", "")
         if "/overall_programs" in referer:
             return redirect("/overall_programs")
         return redirect("/program")
 
     p = {
-        "id": row.id,
-        "program_no": row.program_no,
-        "date": row.date,
-        "fabric": row.fabric,
-        "dia": row.dia,
-        "type": row.type,
-        "product": row.product,
-        "color": row.color,
-        "size": row.size,
-        "ratio": row.ratio,
-        "rolls": row.rolls,
-        "status": row.status,
+        "id": row.id, "program_no": row.program_no, "date": row.date,
+        "fabric": row.fabric, "dia": row.dia, "type": row.type,
+        "product": row.product, "color": row.color, "size": row.size,
+        "ratio": row.ratio, "rolls": row.rolls, "status": row.status,
     }
     return render_template("edit_program.html", p=p)
 
 
 @app.route("/edit_program_group", methods=["POST"])
+@login_required
 def edit_program_group():
-    """Bulk-update status for all underlying size-rows of a group."""
+    """Bulk status update — allowed for any logged-in user (daily workflow)."""
     ids_csv = request.form.get("ids", "")
     new_status = (request.form.get("status") or "").strip().lower()
     if new_status not in ("pending", "completed"):
         return "Invalid status", 400
-
     ids = [i for i in ids_csv.split(",") if i]
     for pid in ids:
         row = Program.query.get(pid)
@@ -616,19 +719,22 @@ def edit_program_group():
 
 
 @app.route("/overall_programs")
+@login_required
 def overall_programs():
     programs = _grouped_programs()
     return render_template("overall_programs.html", programs=programs)
 
 
-@app.route("/logout")
-def logout():
-    return redirect("/")
-
-
 # ---------------- BOOTSTRAP ----------------
 with app.app_context():
     db.create_all()
+    # Seed a default admin if no users exist
+    if User.query.count() == 0:
+        admin = User(username="admin", role="admin")
+        admin.set_password("admin123")
+        db.session.add(admin)
+        db.session.commit()
+        print(">>> Default admin created: username=admin  password=admin123")
 
 
 if __name__ == "__main__":

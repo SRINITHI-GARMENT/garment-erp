@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>User Master</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<div class="container">
+
+<div class="sidebar">
+    <h2>SRINITHI GARMENT</h2>
+    {% if current_user %}
+    <p style="color:#fff;font-size:13px;margin:0 0 10px 0;">
+        Logged in as: <b>{{ current_user.username }}</b> ({{ current_user.role }})
+    </p>
+    {% endif %}
+    <ul>
+        <li><a href="/dashboard">🏠 Dashboard</a></li>
+
+        {% if current_user and current_user.role == 'admin' %}
+        <li class="menu-title">MASTER</li>
+        <li><a href="/colour">🎨 Colour Master</a></li>
+        <li><a href="/size">📏 Size Master</a></li>
+        <li><a href="/fabric">🧵 Fabric Master</a></li>
+        <li><a href="/product">📦 Product Master</a></li>
+        <li><a href="/users">👥 User Master</a></li>
+        {% endif %}
+
+        <li class="menu-title">PROGRAM</li>
+        <li><a href="/program">📋 Program Entry</a></li>
+        <li><a href="/overall_programs">📊 Overall Programs</a></li>
+
+        <li><a href="/logout">🚪 Logout</a></li>
+    </ul>
+</div>
+
+<div class="main">
+
+<h2>USER MASTER</h2>
+
+<a href="/users/new"><button>+ Add User</button></a>
+
+<br><br>
+
+<table class="data-table">
+<thead>
+<tr>
+    <th>ID</th>
+    <th>Username</th>
+    <th>Role</th>
+    <th>Created</th>
+    <th>Action</th>
+</tr>
+</thead>
+<tbody>
+{% for u in users %}
+<tr>
+    <td>{{ u.id }}</td>
+    <td>{{ u.username }}</td>
+    <td>{{ u.role }}</td>
+    <td>{{ u.created_at.strftime('%d-%m-%Y') if u.created_at else '' }}</td>
+    <td>
+        <a href="/edit_user/{{ u.id }}">EDIT</a>
+        {% if not current_user or current_user.id != u.id %}
+        | <a href="/delete_user/{{ u.id }}"
+             onclick="return confirm('Delete user {{ u.username }}?')">DELETE</a>
+        {% endif %}
+    </td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+
+</div>
+</div>
+
+</body>
+</html>
