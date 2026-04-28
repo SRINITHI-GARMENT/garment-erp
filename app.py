@@ -9,10 +9,12 @@ from flask_sqlalchemy import SQLAlchemy
 app = Flask(__name__)
 
 # ---------------- DB CONFIG ----------------
-# IMPORTANT: set DATABASE_URL in Render -> Environment, do NOT hardcode credentials.
+# Prefer the DATABASE_URL env var (set this in Render -> Environment).
+# The hardcoded URL below is only a fallback so the app keeps working
+# until you move the credentials into the env var.
 app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
     "DATABASE_URL",
-    "sqlite:///app.db",  # local fallback
+    "postgresql+psycopg2://postgres.cusbryojwnldabchhfkx:9788%40Srinithi@aws-1-ap-northeast-1.pooler.supabase.com:6543/postgres",
 )
 app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
     "pool_pre_ping": True,
@@ -499,7 +501,7 @@ def delete_program(id):
 # ---------------- EDIT PROGRAM (FIXED) ----------------
 # The inline status dropdown on overall_programs.html only sends `status`.
 # The full edit form on edit_program.html sends `ratio`, `rolls`, and `status`.
-# Use .get() with defaults so both work, and only update fields that were sent.
+# Use .get() so both work, and only update fields that were actually sent.
 @app.route("/edit_program/<id>", methods=["GET", "POST"])
 def edit_program(id):
     row = Program.query.get(id)
@@ -507,7 +509,6 @@ def edit_program(id):
         return "Not Found", 404
 
     if request.method == "POST":
-        # Only update fields that were actually submitted
         if "ratio" in request.form:
             row.ratio = request.form.get("ratio", row.ratio)
         if "rolls" in request.form:
@@ -519,8 +520,7 @@ def edit_program(id):
 
         db.session.commit()
 
-        # If the request came from the overall list (inline dropdown),
-        # send the user back there instead of the program entry page.
+        # If submitted from the overall list, send the user back there.
         referer = request.headers.get("Referer", "")
         if "/overall_programs" in referer:
             return redirect("/overall_programs")
