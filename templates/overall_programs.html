@@ -126,7 +126,8 @@ h1 {
 <td>{{ p.ratio }}</td>
 <td>{{ p.rolls }}</td>
 <td>
-    <form method="POST" action="/edit_program/{{ p.id }}">
+    <form method="POST" action="/edit_program_group">
+        <input type="hidden" name="ids" value="{{ p.ids }}">
         <select name="status" onchange="this.form.submit()">
             <option value="pending"   {% if s == 'pending'   %}selected{% endif %}>pending</option>
             <option value="completed" {% if s == 'completed' %}selected{% endif %}>completed</option>
@@ -165,7 +166,6 @@ function applyFilter(){
         let fabric  = cols[2].innerText.toLowerCase();
         let product = cols[5].innerText.toLowerCase();
 
-        // Read the SELECTED value from the dropdown, not the cell text
         let statusSelect = cols[10].querySelector("select");
         let status = statusSelect ? statusSelect.value.toLowerCase() : "";
 
@@ -176,14 +176,11 @@ function applyFilter(){
         let to   = filters.toDate ? new Date(filters.toDate) : null;
 
         let matchDate = true;
-
         if(from){ from.setHours(0,0,0,0); }
         if(to){ to.setHours(23,59,59,999); }
-
         if(from && rowDate && rowDate < from) matchDate = false;
         if(to && rowDate && rowDate > to) matchDate = false;
 
-        // Exact match for status (empty filter = show all)
         let matchStatus = !filters.status || status === filters.status;
 
         let show =
@@ -201,27 +198,22 @@ document.getElementById("filterProgram").addEventListener("keyup", function(){
     filters.program = this.value.toLowerCase();
     applyFilter();
 });
-
 document.getElementById("filterFabric").addEventListener("keyup", function(){
     filters.fabric = this.value.toLowerCase();
     applyFilter();
 });
-
 document.getElementById("filterProduct").addEventListener("keyup", function(){
     filters.product = this.value.toLowerCase();
     applyFilter();
 });
-
 document.getElementById("filterStatus").addEventListener("change", function(){
     filters.status = this.value.toLowerCase();
     applyFilter();
 });
-
 document.getElementById("fromDate").addEventListener("change", function(){
     filters.fromDate = this.value;
     applyFilter();
 });
-
 document.getElementById("toDate").addEventListener("change", function(){
     filters.toDate = this.value;
     applyFilter();
@@ -229,50 +221,44 @@ document.getElementById("toDate").addEventListener("change", function(){
 
 
 function exportToExcel() {
-
     let table = document.querySelector(".data-table");
     let rows = table.querySelectorAll("tbody tr");
 
     let data = [];
 
-    // Header
     let headers = [];
     table.querySelectorAll("thead th").forEach(th => {
         headers.push(th.innerText);
     });
     data.push(headers);
 
-    // Rows (ONLY visible rows after filter)
     rows.forEach(row => {
         if (row.style.display !== "none") {
-
             let cols = row.querySelectorAll("td");
             let rowData = [];
-
             cols.forEach((td, index) => {
                 if(index === 10){
                     let sel = td.querySelector("select");
                     rowData.push(sel ? sel.value : "");
                 } else {
-                    rowData.push(td.innerText.trim());
+                    // Wrap "L:S" / "1:3" so Excel doesn't split on the colon,
+                    // and escape any commas inside the cell.
+                    let txt = td.innerText.trim().replace(/"/g, '""');
+                    if (txt.indexOf(",") !== -1 || txt.indexOf(":") !== -1) {
+                        txt = '"' + txt + '"';
+                    }
+                    rowData.push(txt);
                 }
             });
-
             data.push(rowData);
         }
     });
 
-    // Convert to CSV format
     let csvContent = "";
+    data.forEach(row => { csvContent += row.join(",") + "\n"; });
 
-    data.forEach(row => {
-        csvContent += row.join(",") + "\n";
-    });
-
-    // Download file
     let blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     let link = document.createElement("a");
-
     link.href = URL.createObjectURL(blob);
     link.download = "fabric_audit.csv";
     link.click();

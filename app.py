@@ -9,7 +9,7 @@ from flask_sqlalchemy import SQLAlchemy
 app = Flask(__name__)
 
 # ---------------- DB CONFIG ----------------
-# Prefer the DATABASE_URL env var (set this in Render -> Environment).
+# Prefer DATABASE_URL env var (set this in Render -> Environment).
 # The hardcoded URL below is only a fallback so the app keeps working
 # until you move the credentials into the env var.
 app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
@@ -160,6 +160,64 @@ def _next_program_no():
     counter.value += 1
     db.session.commit()
     return f"PRG{counter.value:03d}"
+
+
+def _grouped_programs():
+    """
+    Group all Program rows by (program_no, color).
+    Sizes are joined as 'L:S' and ratios as '1:3', mirroring the desired report.
+    """
+    rows = (
+        Program.query
+        .order_by(Program.created_at.desc(), Program.program_no, Program.color)
+        .all()
+    )
+
+    groups = {}
+    order = []
+    for r in rows:
+        key = (r.program_no, r.color)
+        if key not in groups:
+            groups[key] = {
+                "ids": [],
+                "program_no": r.program_no,
+                "date": r.date,
+                "fabric": r.fabric,
+                "dia": r.dia,
+                "type": r.type,
+                "product": r.product,
+                "color": r.color,
+                "sizes": [],
+                "ratios": [],
+                "rolls": r.rolls,
+                "statuses": [],
+            }
+            order.append(key)
+        groups[key]["ids"].append(r.id)
+        groups[key]["sizes"].append(str(r.size))
+        groups[key]["ratios"].append(str(r.ratio))
+        groups[key]["statuses"].append((r.status or "pending").lower())
+
+    out = []
+    for key in order:
+        g = groups[key]
+        all_completed = g["statuses"] and all(s == "completed" for s in g["statuses"])
+        out.append({
+            "ids": ",".join(g["ids"]),
+            "id": g["ids"][0],
+            "program_no": g["program_no"],
+            "date": g["date"],
+            "fabric": g["fabric"],
+            "dia": g["dia"],
+            "type": g["type"],
+            "product": g["product"],
+            "color": g["color"],
+            "size": ":".join(g["sizes"]),
+            "ratio": ":".join(g["ratios"]),
+            "rolls": g["rolls"],
+            "status": "completed" if all_completed else "pending",
+        })
+    return out
 
 
 # ---------------- LOGIN ----------------
@@ -432,23 +490,7 @@ def program():
 
     fabrics = [_to_dict_fabric(f) for f in Fabric.query.order_by(Fabric.id).all()]
     products = [_to_dict_product(p) for p in Product.query.order_by(Product.id).all()]
-    programs = [
-        {
-            "id": p.id,
-            "program_no": p.program_no,
-            "date": p.date,
-            "fabric": p.fabric,
-            "dia": p.dia,
-            "type": p.type,
-            "product": p.product,
-            "color": p.color,
-            "size": p.size,
-            "ratio": p.ratio,
-            "rolls": p.rolls,
-            "status": p.status,
-        }
-        for p in Program.query.order_by(Program.created_at.desc()).all()
-    ]
+    programs = _grouped_programs()
     return render_template(
         "program_entry.html", fabrics=fabrics, products=products, programs=programs
     )
@@ -498,12 +540,26 @@ def delete_program(id):
     return redirect("/program")
 
 
-# ---------------- EDIT PROGRAM (FIXED) ----------------
-# The inline status dropdown on overall_programs.html only sends `status`.
-# The full edit form on edit_program.html sends `ratio`, `rolls`, and `status`.
-# Use .get() so both work, and only update fields that were actually sent.
+@app.route("/delete_program_group")
+def delete_program_group():
+    """Delete all underlying size-rows for a (program_no, color) group."""
+    ids_csv = request.args.get("ids", "")
+    ids = [i for i in ids_csv.split(",") if i]
+    for pid in ids:
+        row = Program.query.get(pid)
+        if row:
+            db.session.delete(row)
+    db.session.commit()
+    return redirect("/program")
+
+
 @app.route("/edit_program/<id>", methods=["GET", "POST"])
 def edit_program(id):
+    """
+    Single-row edit. The inline status dropdown on overall_programs.html only
+    sends `status`; the full edit form on edit_program.html sends ratio/rolls/status.
+    Use .get() so both work and only update fields that were actually sent.
+    """
     row = Program.query.get(id)
     if not row:
         return "Not Found", 404
@@ -520,7 +576,6 @@ def edit_program(id):
 
         db.session.commit()
 
-        # If submitted from the overall list, send the user back there.
         referer = request.headers.get("Referer", "")
         if "/overall_programs" in referer:
             return redirect("/overall_programs")
@@ -543,25 +598,26 @@ def edit_program(id):
     return render_template("edit_program.html", p=p)
 
 
+@app.route("/edit_program_group", methods=["POST"])
+def edit_program_group():
+    """Bulk-update status for all underlying size-rows of a group."""
+    ids_csv = request.form.get("ids", "")
+    new_status = (request.form.get("status") or "").strip().lower()
+    if new_status not in ("pending", "completed"):
+        return "Invalid status", 400
+
+    ids = [i for i in ids_csv.split(",") if i]
+    for pid in ids:
+        row = Program.query.get(pid)
+        if row:
+            row.status = new_status
+    db.session.commit()
+    return redirect("/overall_programs")
+
+
 @app.route("/overall_programs")
 def overall_programs():
-    programs = [
-        {
-            "id": p.id,
-            "program_no": p.program_no,
-            "date": p.date,
-            "fabric": p.fabric,
-            "dia": p.dia,
-            "type": p.type,
-            "product": p.product,
-            "color": p.color,
-            "size": p.size,
-            "ratio": p.ratio,
-            "rolls": p.rolls,
-            "status": p.status,
-        }
-        for p in Program.query.order_by(Program.created_at.desc()).all()
-    ]
+    programs = _grouped_programs()
     return render_template("overall_programs.html", programs=programs)
 
 

@@ -147,7 +147,8 @@ data-colors='{{ p.colors | tojson }}'>
 <td>{{ p.status }}</td>
 <td>
 <a href="/edit_program/{{ p.id }}">EDIT</a> |
-<a href="/delete_program/{{ p.id }}" onclick="return confirm('Delete?')">DELETE</a>
+<a href="/delete_program_group?ids={{ p.ids }}"
+   onclick="return confirm('Delete this colour group (all sizes)?')">DELETE</a>
 </td>
 </tr>
 {% endfor %}
@@ -350,7 +351,7 @@ function applyFilter(){
         let program = cols[0].innerText.toLowerCase();
         let fabric  = cols[2].innerText.toLowerCase();
         let product = cols[5].innerText.toLowerCase();
-        let status  = cols[10].innerText.toLowerCase();
+        let status  = cols[10].innerText.trim().toLowerCase();
 
         let rowDateText = cols[1].innerText;
         let rowDate = parseDate(rowDateText);
@@ -366,11 +367,13 @@ function applyFilter(){
         if(from && rowDate && rowDate < from) matchDate = false;
         if(to && rowDate && rowDate > to) matchDate = false;
 
+        let matchStatus = !filters.status || status === filters.status;
+
         let show =
             program.includes(filters.program) &&
             fabric.includes(filters.fabric) &&
             product.includes(filters.product) &&
-            status.includes(filters.status) &&
+            matchStatus &&
             matchDate;
 
         row.style.display = show ? "" : "none";
