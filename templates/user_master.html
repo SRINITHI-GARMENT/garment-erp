@@ -3,6 +3,26 @@
 <head>
 <title>User Master</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<style>
+  .perm-cell {
+      font-size: 12px;
+      color: #333;
+      max-width: 350px;
+  }
+  .perm-pill {
+      display: inline-block;
+      background: #eaf3ff;
+      color: #0984e3;
+      padding: 2px 6px;
+      margin: 1px;
+      border-radius: 4px;
+      font-size: 11px;
+  }
+  .all-pill {
+      background: #d4edda;
+      color: #155724;
+  }
+</style>
 </head>
 <body>
 
@@ -18,14 +38,12 @@
     <ul>
         <li><a href="/dashboard">🏠 Dashboard</a></li>
 
-        {% if current_user and current_user.role == 'admin' %}
         <li class="menu-title">MASTER</li>
         <li><a href="/colour">🎨 Colour Master</a></li>
         <li><a href="/size">📏 Size Master</a></li>
         <li><a href="/fabric">🧵 Fabric Master</a></li>
         <li><a href="/product">📦 Product Master</a></li>
         <li><a href="/users">👥 User Master</a></li>
-        {% endif %}
 
         <li class="menu-title">PROGRAM</li>
         <li><a href="/program">📋 Program Entry</a></li>
@@ -43,12 +61,13 @@
 
 <br><br>
 
-<table class="data-table">
+<table class="data-table" style="width:100%;">
 <thead>
 <tr>
     <th>ID</th>
     <th>Username</th>
     <th>Role</th>
+    <th>Permissions</th>
     <th>Created</th>
     <th>Action</th>
 </tr>
@@ -59,6 +78,17 @@
     <td>{{ u.id }}</td>
     <td>{{ u.username }}</td>
     <td>{{ u.role }}</td>
+    <td class="perm-cell">
+        {% if u.role == 'admin' %}
+            <span class="perm-pill all-pill">ALL (admin)</span>
+        {% elif u.permissions %}
+            {% for p in u.permissions %}
+                <span class="perm-pill">{{ p }}</span>
+            {% endfor %}
+        {% else %}
+            <i style="color:#999;">none</i>
+        {% endif %}
+    </td>
     <td>{{ u.created_at.strftime('%d-%m-%Y') if u.created_at else '' }}</td>
     <td>
         <a href="/edit_user/{{ u.id }}">EDIT</a>

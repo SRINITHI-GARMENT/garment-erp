@@ -3,6 +3,45 @@
 <head>
 <title>{% if user %}Edit User{% else %}Add User{% endif %}</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<style>
+  .perm-box {
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 12px 15px;
+      margin-bottom: 10px;
+  }
+  .perm-box h4 {
+      margin: 0 0 8px 0;
+      color: #1e272e;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 4px;
+  }
+  .perm-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+  }
+  .perm-row label {
+      font-weight: normal;
+      font-size: 13px;
+      cursor: pointer;
+  }
+  .perm-row input[type="checkbox"] {
+      width: auto;
+      margin-right: 4px;
+  }
+  .perm-actions {
+      margin: 8px 0 14px 0;
+  }
+  .perm-actions button {
+      width: auto;
+      padding: 4px 10px;
+      font-size: 12px;
+      background: #485460;
+      margin-right: 6px;
+  }
+</style>
 </head>
 <body>
 
@@ -21,14 +60,12 @@
     <ul>
         <li><a href="/dashboard">🏠 Dashboard</a></li>
 
-        {% if current_user and current_user.role == 'admin' %}
         <li class="menu-title">MASTER</li>
         <li><a href="/colour">🎨 Colour Master</a></li>
         <li><a href="/size">📏 Size Master</a></li>
         <li><a href="/fabric">🧵 Fabric Master</a></li>
         <li><a href="/product">📦 Product Master</a></li>
         <li><a href="/users">👥 User Master</a></li>
-        {% endif %}
 
         <li class="menu-title">PROGRAM</li>
         <li><a href="/program">📋 Program Entry</a></li>
@@ -47,7 +84,7 @@
 <p style="color:red; font-weight:bold;">{{ error }}</p>
 {% endif %}
 
-<form method="POST" class="form-card" style="max-width:400px;">
+<form method="POST" class="form-card" style="max-width:700px;">
 
     <label>Username</label><br>
     <input type="text" name="username"
@@ -65,11 +102,44 @@
            style="width:100%; padding:6px;"><br><br>
 
     <label>Role</label><br>
-    <select name="role" style="width:100%; padding:6px;">
+    <select name="role" id="role" style="width:100%; padding:6px;"
+            onchange="onRoleChange()">
         <option value="user"  {% if user and user.role == 'user'  %}selected{% endif %}>user</option>
         <option value="admin" {% if user and user.role == 'admin' %}selected{% endif %}>admin</option>
     </select><br><br>
 
+    <h3 style="margin-bottom:6px;">PERMISSIONS</h3>
+    <p style="color:#666;font-size:13px;margin-top:0;">
+        Tick the pages and actions this user is allowed to use.
+        Admin users automatically get every permission.
+    </p>
+
+    <div class="perm-actions">
+        <button type="button" onclick="checkAll(true)">Select All</button>
+        <button type="button" onclick="checkAll(false)">Clear All</button>
+    </div>
+
+    {% set existing = user.permissions if user else [] %}
+
+    {% for group_name, items in permission_groups %}
+    <div class="perm-box">
+        <h4>{{ group_name }}</h4>
+        <div class="perm-row">
+            {% for code, label in items %}
+            <label>
+                <input type="checkbox"
+                       class="perm-cb"
+                       name="perms"
+                       value="{{ code }}"
+                       {% if code in existing %}checked{% endif %}>
+                {{ label }}
+            </label>
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+
+    <br>
     <button type="submit">{% if user %}Update User{% else %}Save User{% endif %}</button>
     <a href="/users"><button type="button">Cancel</button></a>
 
@@ -77,6 +147,27 @@
 
 </div>
 </div>
+
+<script>
+function checkAll(state){
+    document.querySelectorAll(".perm-cb").forEach(cb => {
+        if(!cb.disabled) cb.checked = state;
+    });
+}
+
+function onRoleChange(){
+    let role = document.getElementById("role").value;
+    let boxes = document.querySelectorAll(".perm-cb");
+    if(role === "admin"){
+        boxes.forEach(cb => { cb.checked = true; cb.disabled = true; });
+    } else {
+        boxes.forEach(cb => { cb.disabled = false; });
+    }
+}
+
+// run once on page load to lock checkboxes if role is already admin
+window.addEventListener("DOMContentLoaded", onRoleChange);
+</script>
 
 </body>
 </html>
