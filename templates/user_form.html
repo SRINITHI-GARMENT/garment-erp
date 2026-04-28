@@ -1,20 +1,23 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>User Master</title>
+<title>{% if user %}Edit User{% else %}Add User{% endif %}</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
 
 <div class="container">
 
+<!-- SIDEBAR -->
 <div class="sidebar">
     <h2>SRINITHI GARMENT</h2>
+
     {% if current_user %}
     <p style="color:#fff;font-size:13px;margin:0 0 10px 0;">
         Logged in as: <b>{{ current_user.username }}</b> ({{ current_user.role }})
     </p>
     {% endif %}
+
     <ul>
         <li><a href="/dashboard">🏠 Dashboard</a></li>
 
@@ -35,42 +38,42 @@
     </ul>
 </div>
 
+<!-- MAIN CONTENT -->
 <div class="main">
 
-<h2>USER MASTER</h2>
+<h2>{% if user %}EDIT USER — {{ user.username }}{% else %}ADD NEW USER{% endif %}</h2>
 
-<a href="/users/new"><button>+ Add User</button></a>
+{% if error %}
+<p style="color:red; font-weight:bold;">{{ error }}</p>
+{% endif %}
 
-<br><br>
+<form method="POST" class="form-card" style="max-width:400px;">
 
-<table class="data-table">
-<thead>
-<tr>
-    <th>ID</th>
-    <th>Username</th>
-    <th>Role</th>
-    <th>Created</th>
-    <th>Action</th>
-</tr>
-</thead>
-<tbody>
-{% for u in users %}
-<tr>
-    <td>{{ u.id }}</td>
-    <td>{{ u.username }}</td>
-    <td>{{ u.role }}</td>
-    <td>{{ u.created_at.strftime('%d-%m-%Y') if u.created_at else '' }}</td>
-    <td>
-        <a href="/edit_user/{{ u.id }}">EDIT</a>
-        {% if not current_user or current_user.id != u.id %}
-        | <a href="/delete_user/{{ u.id }}"
-             onclick="return confirm('Delete user {{ u.username }}?')">DELETE</a>
+    <label>Username</label><br>
+    <input type="text" name="username"
+           value="{% if user %}{{ user.username }}{% endif %}"
+           required style="width:100%; padding:6px;"><br><br>
+
+    <label>
+        Password
+        {% if user %}
+        <small style="color:#666;">(leave blank to keep existing)</small>
         {% endif %}
-    </td>
-</tr>
-{% endfor %}
-</tbody>
-</table>
+    </label><br>
+    <input type="password" name="password"
+           {% if not user %}required{% endif %}
+           style="width:100%; padding:6px;"><br><br>
+
+    <label>Role</label><br>
+    <select name="role" style="width:100%; padding:6px;">
+        <option value="user"  {% if user and user.role == 'user'  %}selected{% endif %}>user</option>
+        <option value="admin" {% if user and user.role == 'admin' %}selected{% endif %}>admin</option>
+    </select><br><br>
+
+    <button type="submit">{% if user %}Update User{% else %}Save User{% endif %}</button>
+    <a href="/users"><button type="button">Cancel</button></a>
+
+</form>
 
 </div>
 </div>
