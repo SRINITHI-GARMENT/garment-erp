@@ -85,7 +85,7 @@ h1 {
 <select id="filterStatus">
 <option value="">All Status</option>
 <option value="pending">Pending</option>
-<option value="completed">completed</option>
+<option value="completed">Completed</option>
 </select>
 
 </div>
@@ -125,11 +125,14 @@ h1 {
 <td>{{ p.ratio }}</td>
 <td>{{ p.rolls }}</td>
 <td>
-    <form method="POST" action="/edit_program/{{p.id}}">
+    <form method="POST" action="/edit_program/{{ p.id }}">
+        {# Remove the next line if you are NOT using Flask-WTF / CSRFProtect #}
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <select name="status" onchange="this.form.submit()">
-            <option value="pending" {% if p.status == 'pending' %}selected{% endif %}>pending</option>
+            <option value="pending"   {% if p.status == 'pending'   %}selected{% endif %}>pending</option>
             <option value="completed" {% if p.status == 'completed' %}selected{% endif %}>completed</option>
         </select>
+    </form>
 </td>
 </tr>
 {% endfor %}
@@ -162,7 +165,10 @@ function applyFilter(){
         let program = cols[0].innerText.toLowerCase();
         let fabric  = cols[2].innerText.toLowerCase();
         let product = cols[5].innerText.toLowerCase();
-        let status  = cols[10].innerText.toLowerCase();
+
+        // Read the SELECTED value from the dropdown, not the cell text
+        let statusSelect = cols[10].querySelector("select");
+        let status = statusSelect ? statusSelect.value.toLowerCase() : "";
 
         let rowDateText = cols[1].innerText;
         let rowDate = parseDate(rowDateText);
@@ -178,11 +184,14 @@ function applyFilter(){
         if(from && rowDate && rowDate < from) matchDate = false;
         if(to && rowDate && rowDate > to) matchDate = false;
 
+        // Exact match for status (empty filter = show all)
+        let matchStatus = !filters.status || status === filters.status;
+
         let show =
             program.includes(filters.program) &&
             fabric.includes(filters.fabric) &&
             product.includes(filters.product) &&
-            status.includes(filters.status) &&
+            matchStatus &&
             matchDate;
 
         row.style.display = show ? "" : "none";
@@ -245,10 +254,10 @@ function exportToExcel() {
 
                 // Handle status dropdown
                 if(index === 10){
-                    let val = td.querySelector("select").value;
-                    rowData.push(val);
+                    let sel = td.querySelector("select");
+                    rowData.push(sel ? sel.value : "");
                 } else {
-                    rowData.push(td.innerText);
+                    rowData.push(td.innerText.trim());
                 }
 
             });
@@ -257,7 +266,7 @@ function exportToExcel() {
         }
     });
 
-    // Convert to Excel format
+    // Convert to CSV format
     let csvContent = "";
 
     data.forEach(row => {
