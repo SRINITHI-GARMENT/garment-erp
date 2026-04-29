@@ -18,6 +18,16 @@
 <p><b>Color:</b> {{ p.color }}</p>
 <p><b>Size:</b> {{ p.size }}</p>
 
+{% if p.supplier %}
+<p><b>Supplier:</b> {{ p.supplier }}</p>
+{% endif %}
+{% if p.lot_no %}
+<p><b>Lot No:</b> {{ p.lot_no }}</p>
+{% endif %}
+{% if p.completed_date %}
+<p><b>Completed Date:</b> {{ p.completed_date }}</p>
+{% endif %}
+
 <label>Ratio</label>
 <input type="text" name="ratio" value="{{ p.ratio }}">
 
@@ -28,10 +38,12 @@
 
 <br><br>
 
+{% set s = (p.status or 'pending')|lower %}
 <label>Status</label>
 <select name="status">
-<option value="PENDING" {% if p.status == "PENDING" %}selected{% endif %}>PENDING</option>
-<option value="DONE" {% if p.status == "DONE" %}selected{% endif %}>DONE</option>
+    <option value="pending"   {% if s == 'pending'   %}selected{% endif %}>PENDING</option>
+    <option value="wip"       {% if s == 'wip'       %}selected{% endif %}>WIP</option>
+    <option value="completed" {% if s == 'completed' %}selected{% endif %}>COMPLETED</option>
 </select>
 
 <br><br>
