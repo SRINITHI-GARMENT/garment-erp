@@ -3,24 +3,33 @@
 <head>
 <title>Program View</title>
 <style>
-table {
-    border-collapse: collapse;
-    width: 100%;
+body { font-family: Arial, sans-serif; padding: 20px; }
+table { border-collapse: collapse; width: 100%; margin-bottom: 15px;}
+th, td { border: 1px solid #ccc; padding: 8px; }
+th { background: #333; color: white; }
+.allocate-box {
+    background: #fff8e1; border: 1px solid #f0c36d;
+    padding: 15px; border-radius: 8px; margin: 15px 0;
+    max-width: 500px;
 }
-th, td {
-    border: 1px solid #ccc;
-    padding: 8px;
+.allocate-box h3 { margin-top: 0; }
+.allocate-box select, .allocate-box button {
+    padding: 8px; margin-top: 8px;
 }
-th {
-    background: #333;
-    color: white;
+.status-pill {
+    display:inline-block; padding:3px 10px; border-radius:4px;
+    color:white; font-weight:bold; font-size:12px;
 }
+.s-pending  { background:#888; }
+.s-wip      { background:#f39c12; }
+.s-completed{ background:#27ae60; }
 </style>
 </head>
 
 <body>
 
 <button type="button" onclick="printPage()">🖨️ Print</button>
+<a href="/overall_programs"><button type="button">⬅ Back</button></a>
 
 <h2>PROGRAM DETAILS</h2>
 
@@ -31,54 +40,62 @@ th {
 <tr><td><b>Fabric</b></td><td>{{ header.fabric }}</td>
     <td><b>DIA</b></td><td>{{ header.dia }}</td></tr>
 
-<tr><td><b>Product</b></td><td>{{ header.product }}</td></tr>
+<tr><td><b>Product</b></td><td>{{ header.product }}</td>
+    <td><b>Status</b></td>
+    <td><span class="status-pill s-{{ header.status }}">{{ header.status|upper }}</span></td></tr>
+
+{% if header.supplier %}
+<tr><td><b>Supplier</b></td><td colspan="3">{{ header.supplier }}</td></tr>
+{% endif %}
+{% if header.lot_no %}
+<tr><td><b>Lot No</b></td><td>{{ header.lot_no }}</td>
+    <td><b>Completed</b></td><td>{{ header.completed_date }}</td></tr>
+{% endif %}
 </table>
 
-<br>
+<!-- ALLOCATE SUPPLIER (only when ?mode=allocate) -->
+{% if mode == 'allocate' and header.status != 'completed' %}
+<div class="allocate-box">
+    <h3>Allocate Supplier</h3>
+    <form method="POST" action="/allocate_supplier">
+        <input type="hidden" name="program_no" value="{{ header.program_no }}">
+        <select name="supplier" required>
+            <option value="">-- Select Supplier --</option>
+            {% for s in suppliers %}
+            <option value="{{ s.name }}"
+                {% if s.name == header.supplier %}selected{% endif %}>
+                {{ s.name }}{% if s.code %} ({{ s.code }}){% endif %}
+            </option>
+            {% endfor %}
+        </select>
+        <br>
+        <button type="submit">Proceed ➜ Print</button>
+    </form>
+</div>
+{% endif %}
 
 <!-- SIZE RATIO -->
 <table>
 <tr>
     <th>Size</th>
-    {% for size in size_ratio.keys() %}
-    <th>{{ size }}</th>
-    {% endfor %}
+    {% for size in size_ratio.keys() %}<th>{{ size }}</th>{% endfor %}
 </tr>
-
 <tr>
     <td><b>Ratio</b></td>
-    {% for val in size_ratio.values() %}
-    <td>{{ val }}</td>
-    {% endfor %}
+    {% for val in size_ratio.values() %}<td>{{ val }}</td>{% endfor %}
 </tr>
 </table>
-
-<br>
 
 <!-- COLOUR ROLLS -->
 <table>
-<tr>
-    <th>Colour</th>
-    <th>Rolls</th>
-</tr>
-
+<tr><th>Colour</th><th>Rolls</th></tr>
 {% for c, r in colour_rolls.items() %}
-<tr>
-    <td>{{ c }}</td>
-    <td>{{ r }}</td>
-</tr>
+<tr><td>{{ c }}</td><td>{{ r }}</td></tr>
 {% endfor %}
-
 </table>
 
-<br>
-<a href="/program">⬅ Back</a>
-
 <script>
-function printPage() {
-    window.print();
-}
+function printPage() { window.print(); }
 </script>
-
 </body>
 </html>

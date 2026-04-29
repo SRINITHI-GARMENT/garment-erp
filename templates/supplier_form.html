@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Edit Supplier</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<div class="container">
+<div class="sidebar">
+    <h2>SRINITHI GARMENT</h2>
+    <ul>
+        <li><a href="/dashboard">🏠 Dashboard</a></li>
+        <li class="menu-title">MASTER</li>
+        <li><a href="/colour">🎨 Colour Master</a></li>
+        <li><a href="/size">📏 Size Master</a></li>
+        <li><a href="/fabric">🧵 Fabric Master</a></li>
+        <li><a href="/product">📦 Product Master</a></li>
+        <li><a href="/supplier">🏭 Supplier Master</a></li>
+        <li class="menu-title">PROGRAM</li>
+        <li><a href="/program">📋 Program Entry</a></li>
+        <li><a href="/overall_programs">📊 Overall Programs</a></li>
+        <li><a href="/logout">🚪 Logout</a></li>
+    </ul>
+</div>
+
+<div class="main">
+<h2>EDIT SUPPLIER — {{ supplier.name }}</h2>
+
+<form method="POST" class="form-card" style="max-width:500px;">
+    <div class="form-group"><label>Name</label>
+        <input name="name" value="{{ supplier.name }}" required></div>
+    <div class="form-group"><label>Code</label>
+        <input name="code" value="{{ supplier.code }}"></div>
+    <div class="form-group"><label>Contact</label>
+        <input name="contact" value="{{ supplier.contact }}"></div>
+    <div class="form-group"><label>Address</label>
+        <input name="address" value="{{ supplier.address }}"></div>
+    <button type="submit">Update</button>
+    <a href="/supplier"><button type="button">Cancel</button></a>
+</form>
+</div>
+</div>
+
+</body>
+</html>

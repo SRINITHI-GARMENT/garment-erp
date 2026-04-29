@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Supplier Master</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<div class="container">
+
+<div class="sidebar">
+    <h2>SRINITHI GARMENT</h2>
+    {% if current_user %}
+    <p style="color:#fff;font-size:13px;margin:0 0 10px 0;">
+        Logged in as: <b>{{ current_user.username }}</b> ({{ current_user.role }})
+    </p>
+    {% endif %}
+    <ul>
+        <li><a href="/dashboard">🏠 Dashboard</a></li>
+        <li class="menu-title">MASTER</li>
+        <li><a href="/colour">🎨 Colour Master</a></li>
+        <li><a href="/size">📏 Size Master</a></li>
+        <li><a href="/fabric">🧵 Fabric Master</a></li>
+        <li><a href="/product">📦 Product Master</a></li>
+        <li><a href="/supplier">🏭 Supplier Master</a></li>
+        <li><a href="/users">👥 User Master</a></li>
+        <li class="menu-title">PROGRAM</li>
+        <li><a href="/program">📋 Program Entry</a></li>
+        <li><a href="/overall_programs">📊 Overall Programs</a></li>
+        <li><a href="/logout">🚪 Logout</a></li>
+    </ul>
+</div>
+
+<div class="main">
+<h2>SUPPLIER MASTER</h2>
+
+{% if current_user and current_user.has('supplier_add') %}
+<div class="form-card" style="max-width:600px;">
+<form method="POST">
+    <div class="form-group"><label>Supplier Name</label>
+        <input name="name" required></div>
+    <div class="form-group"><label>Code</label>
+        <input name="code"></div>
+    <div class="form-group"><label>Contact</label>
+        <input name="contact" placeholder="Phone / Email"></div>
+    <div class="form-group"><label>Address</label>
+        <input name="address"></div>
+    <button type="submit">Save Supplier</button>
+</form>
+</div>
+{% endif %}
+
+<br>
+<div class="form-card" style="max-width:700px;">
+<form method="GET" style="display:flex; gap:8px; flex-wrap:wrap;">
+    <input name="search" value="{{ f_search }}" placeholder="Search Name">
+    <input name="code" value="{{ f_code }}" placeholder="Code">
+    <input name="contact" value="{{ f_contact }}" placeholder="Contact">
+    <button type="submit">Filter</button>
+    <a href="/supplier"><button type="button">Reset</button></a>
+</form>
+</div>
+
+<br>
+<table class="data-table" style="width:100%;">
+<thead>
+<tr>
+    <th>S.No</th><th>Name</th><th>Code</th><th>Contact</th>
+    <th>Address</th><th>Created</th><th>Action</th>
+</tr>
+</thead>
+<tbody>
+{% for s in suppliers %}
+<tr>
+    <td>{{ loop.index }}</td>
+    <td>{{ s.name }}</td>
+    <td>{{ s.code }}</td>
+    <td>{{ s.contact }}</td>
+    <td>{{ s.address }}</td>
+    <td>{{ s.created_at.strftime('%d-%m-%Y') if s.created_at else '' }}</td>
+    <td>
+        {% if current_user and current_user.has('supplier_edit') %}
+        <a class="btn edit" href="/edit_supplier/{{ s.id }}">Edit</a>
+        {% endif %}
+        {% if current_user and current_user.has('supplier_delete') %}
+        <a class="btn delete" href="/delete_supplier/{{ s.id }}"
+           onclick="return confirm('Delete supplier {{ s.name }}?')">Delete</a>
+        {% endif %}
+    </td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+
+</div>
+</div>
+</body>
+</html>
