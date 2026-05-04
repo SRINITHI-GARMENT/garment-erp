@@ -103,7 +103,8 @@ data-colors='{{ p.colors | tojson }}'>
 <select id="filterStatus">
 <option value="">All Status</option>
 <option value="pending">Pending</option>
-<option value="completed">DONE</option>
+<option value="wip">WIP</option>
+<option value="completed">Completed</option>
 </select>
 
 </div>
@@ -145,7 +146,7 @@ data-colors='{{ p.colors | tojson }}'>
 <td>{{ p.rolls }}</td>
 <td>{{ p.status }}</td>
 <td>
-<a href="/edit_program/{{ p.id }}">EDIT</a> |
+<a href="/edit_program/{{ p.ids }}">EDIT</a> |
 <a href="/delete_program_group?ids={{ p.ids }}"
    onclick="return confirm('Delete this colour group (all sizes)?')">DELETE</a>
 </td>

@@ -16,7 +16,7 @@
 <p><b>Program:</b> {{ p.program_no }}</p>
 <p><b>Product:</b> {{ p.product }}</p>
 <p><b>Color:</b> {{ p.color }}</p>
-<p><b>Size:</b> {{ p.size }}</p>
+<p><b>Size(s):</b> {% for r in rows %}{{ r.size }}{% if not loop.last %}, {% endif %}{% endfor %}</p>
 
 {% if p.supplier %}
 <p><b>Supplier:</b> {{ p.supplier }}</p>
@@ -28,10 +28,11 @@
 <p><b>Completed Date:</b> {{ p.completed_date }}</p>
 {% endif %}
 
-<label>Ratio</label>
-<input type="text" name="ratio" value="{{ p.ratio }}">
-
+{% for r in rows %}
+<label>Ratio (Size {{ r.size }})</label>
+<input type="text" name="ratio_{{ r.id }}" value="{{ r.ratio }}">
 <br><br>
+{% endfor %}
 
 <label>Rolls</label>
 <input type="text" name="rolls" value="{{ p.rolls }}">
