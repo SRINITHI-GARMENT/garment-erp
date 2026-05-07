@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>EBO Base Stock</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<div class="container">
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <h2>SRINITHI GARMENT</h2>
+
+        <ul>
+            <li><a href="/dashboard">🏠 Dashboard</a></li>
+            <li class="menu-title">MASTER</li>
+            <li><a href="/colour">🎨 Colour Master</a></li>
+            <li><a href="/size">📏 Size Master</a></li>
+            <li><a href="/fabric">🧵 Fabric Master</a></li>
+            <li><a href="/product">📦 Product Master</a></li>
+            <li><a href="/supplier">🏭 Supplier Master</a></li>
+            <li class="menu-title">PROGRAM</li>
+            <li><a href="/program">📋 Program Entry</a></li>
+            <li><a href="/overall_programs">📊 Overall Programs</a></li>
+            <li><a href="/ebo">📈 EBO Program</a></li>
+            <li class="menu-title">Account</li>
+            <li><a href="/logout">🚪 Logout</a></li>
+        </ul>
+    </div>
+
+    <!-- Main -->
+    <div class="main">
+        <h1>EBO Base Stock Management 📦</h1>
+        <p>Manage the target inventory levels for all store locations.</p>
+
+        <form action="/upload-base" method="post" enctype="multipart/form-data">
+            <label class="btn">
+                <input type="file" name="file" hidden onchange="this.form.submit()">
+                ⬆ Replace All Data
+            </label>
+        </form>
+
+        <div class="card">
+            <input type="text" id="searchInput" placeholder="Search EBO, Product, or Color..." onkeyup="searchTable()">
+            <p>{{ data|length }} records found</p>
+
+            <table id="stockTable">
+                <thead>
+                    <tr>
+                        <th>EBO</th>
+                        <th>Product</th>
+                        <th>Color</th>
+                        <th>Size</th>
+                        <th>Base Qty</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in data %}
+                    <tr>
+                        <td>{{ row.ebo }}</td>
+                        <td>{{ row.product }}</td>
+                        <td>{{ row.color }}</td>
+                        <td>{{ row.size }}</td>
+                        <td>{{ row.base_qty }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <script>
+        function searchTable() {
+            let input = document.getElementById("searchInput").value.toLowerCase();
+            let table = document.getElementById("stockTable");
+            let rows = table.getElementsByTagName("tr");
+            for (let i = 1; i < rows.length; i++) {
+                let text = rows[i].innerText.toLowerCase();
+                rows[i].style.display = text.includes(input) ? "" : "none";
+            }
+        }
+        </script>
+    </div>
+
+</div>
+
+</body>
+</html>

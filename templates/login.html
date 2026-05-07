@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Login - Cutting Software</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<div class="login-container">
+    <div class="login-card">
+        <h2>WELCOME-SRINITHI GARMENT</h2>
+        <p class="subtitle">Login to continue</p>
+
+        <form method="POST">
+            <div class="input-group">
+                <input type="text" name="username" required>
+                <label>Username</label>
+            </div>
+
+            <div class="input-group">
+                <input type="password" name="password" required id="password">
+                <label>Password</label>
+            </div>
+
+            <div class="options">
+                <label><input type="checkbox"> Remember me</label>
+                <span class="toggle" onclick="togglePassword()">👁️</span>
+            </div>
+
+            <button type="submit">Login</button>
+
+            {% if error %}
+                <p class="error">{{ error }}</p>
+            {% endif %}
+        </form>
+    </div>
+</div>
+
+<script>
+function togglePassword() {
+    let pass = document.getElementById("password");
+    pass.type = pass.type === "password" ? "text" : "password";
+}
+</script>
+
+</body>
+</html>

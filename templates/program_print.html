@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Print — {{ header.program_no }}</title>
+<style>
+body {
+    font-family: Arial, sans-serif;
+    padding: 20px;
+}
+table {
+    border-collapse: collapse;
+    width: 100%;
+    margin-bottom: 15px;
+}
+th, td {
+    border: 1px solid #000;
+    padding: 8px;
+}
+th {
+    background: #333;
+    color: white;
+}
+.supplier-banner {
+    background: #ffeaa7;
+    border: 2px solid #d35400;
+    padding: 12px;
+    font-size: 18px;
+    font-weight: bold;
+    text-align: center;
+    margin-bottom: 15px;
+}
+.no-print {
+    margin-bottom: 10px;
+}
+@media print {
+    .no-print { display: none; }
+}
+</style>
+</head>
+<body>
+
+<div class="no-print">
+    <button onclick="window.print()">🖨️ Print Again</button>
+    <a href="/overall_programs"><button>⬅ Back to Overall Programs</button></a>
+</div>
+
+<h2 style="text-align:center;">CUTTING PROGRAM — {{ header.program_no }}</h2>
+
+<div class="supplier-banner">
+    SUPPLIER: {{ header.supplier or '— NOT ALLOCATED —' }}
+</div>
+
+<table>
+<tr>
+    <td><b>Program No</b></td><td>{{ header.program_no }}</td>
+    <td><b>Date</b></td><td>{{ header.date }}</td>
+</tr>
+<tr>
+    <td><b>Fabric</b></td><td>{{ header.fabric }}</td>
+    <td><b>DIA</b></td><td>{{ header.dia }}</td>
+</tr>
+<tr>
+    <td><b>Product</b></td><td>{{ header.product }}</td>
+    <td><b>Status</b></td><td>{{ header.status|upper }}</td>
+</tr>
+</table>
+
+<h3>SIZE / RATIO</h3>
+<table>
+<tr>
+    <th>Size</th>
+    {% for s in size_ratio.keys() %}<th>{{ s }}</th>{% endfor %}
+</tr>
+<tr>
+    <td><b>Ratio</b></td>
+    {% for v in size_ratio.values() %}<td>{{ v }}</td>{% endfor %}
+</tr>
+</table>
+
+<h3>COLOUR / ROLLS</h3>
+<table>
+<tr><th>Colour</th><th>Rolls</th></tr>
+{% for c, r in colour_rolls.items() %}
+<tr><td>{{ c }}</td><td>{{ r }}</td></tr>
+{% endfor %}
+</table>
+
+<script>
+window.addEventListener("load", function(){
+    setTimeout(function(){ window.print(); }, 400);
+});
+</script>
+
+</body>
+</html>

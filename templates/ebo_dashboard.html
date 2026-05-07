@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Dashboard</title>
+    <title>EBO Dashboard</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
@@ -32,22 +32,47 @@
 
     <!-- Main -->
     <div class="main">
-        <h1>Welcome to Cutting Dashboard 🚀</h1>
+        <h1>EBO Dashboard 📈</h1>
+
+        <p>Overview of inventory performance and stock targets.</p>
 
         <div class="cards">
             <div class="card">
-                <h3>Total Programs</h3>
-                <p>120</p>
+                <h3>Total EBOs</h3>
+                <p>{{ total_ebos }}</p>
             </div>
 
             <div class="card">
-                <h3>Total Cutting</h3>
-                <p>5400 pcs</p>
+                <h3>Total Products</h3>
+                <p>{{ total_products }}</p>
             </div>
 
             <div class="card">
-                <h3>Pending</h3>
-                <p>800 pcs</p>
+                <h3>Total Base Qty</h3>
+                <p>{{ total_base_qty }}</p>
+            </div>
+
+            <div class="card">
+                <h3>Total Actual Qty</h3>
+                <p>{{ total_actual_qty if total_actual_qty else "Not uploaded" }}</p>
+            </div>
+        </div>
+
+        <div class="cards">
+            <div class="card">
+                <a href="/ebo-base-stock">📦 Base Stock</a>
+            </div>
+
+            <div class="card">
+                <a href="/ebo-report">📈 EBO Report</a>
+            </div>
+
+            <div class="card">
+                <a href="/ebo-product-report">📄 Product Report</a>
+            </div>
+
+            <div class="card">
+                <a href="/ebo-excess-stock">🔀 Excess Stock</a>
             </div>
         </div>
     </div>

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>EBO Report</title>
+    <title>EBO Excess Stock</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
@@ -32,13 +32,13 @@
 
     <!-- Main -->
     <div class="main">
-        <h1>EBO Requirement Report 📈</h1>
-        <p>View shortages and excess inventory by store location.</p>
+        <h1>Excess Stock Report 🔀</h1>
+        <p>Identify items where actual stock exceeds the base target.</p>
 
         {% if not data %}
         <div class="warning">
             <h4>Missing Data</h4>
-            <p>You need to upload Actual Stock data to view requirements.</p>
+            <p>You need to upload Actual Stock data to view excess inventory.</p>
             <form action="/upload-actual" method="post" enctype="multipart/form-data">
                 <label class="btn">
                     <input type="file" name="file" hidden onchange="this.form.submit()">
@@ -61,7 +61,7 @@
                         <th>Size</th>
                         <th>Base Qty</th>
                         <th>Actual Stock</th>
-                        <th>Required</th>
+                        <th>Excess Qty</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -74,7 +74,7 @@
                             <td>{{ row.size }}</td>
                             <td>{{ row.base_qty }}</td>
                             <td>{{ row.actual_qty }}</td>
-                            <td>{{ row.required }}</td>
+                            <td>{{ row.excess_qty }}</td>
                         </tr>
                         {% endfor %}
                     {% else %}

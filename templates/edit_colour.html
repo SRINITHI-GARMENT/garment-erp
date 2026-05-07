@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Edit Colour</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<div class="main">
+    <h2>Edit Colour</h2>
+
+    <form method="POST">
+        <input type="text" name="colour" value="{{ colour.name }}" required>
+        <input type="text" name="code" value="{{ colour.code }}">
+        <button type="submit">Update</button>
+    </form>
+
+</div>
+
+</body>
+</html>
