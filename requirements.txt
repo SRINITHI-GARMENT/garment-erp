@@ -4,3 +4,4 @@ openpyxl
 sqlalchemy
 httpx==0.27.2
 gunicorn
+psycopg2-binary
