@@ -3,3 +3,4 @@ pandas
 openpyxl
 sqlalchemy
 httpx==0.27.2
+gunicorn
