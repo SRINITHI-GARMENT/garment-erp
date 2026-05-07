@@ -726,20 +726,31 @@ def cutting_completion():
     return redirect(request.referrer or "/overall_programs")
 
 
-@app.route("/edit_program/<pid>", methods=["GET", "POST"])
+@app.route("/edit_program/<pids>", methods=["GET", "POST"])
 @permission_required("program_edit")
-def edit_program(pid):
-    p = Program.query.get_or_404(pid)
+def edit_program(pids):
+    id_list = [i.strip() for i in pids.split(",") if i.strip()]
+    rows = Program.query.filter(Program.id.in_(id_list)).all()
+    if not rows:
+        return "Program not found", 404
+        
+    rows_dict = {r.id: r for r in rows}
+    ordered_rows = [rows_dict[i] for i in id_list if i in rows_dict]
+    
     if request.method == "POST":
-        p.ratio = request.form.get("ratio", p.ratio)
-        p.rolls = request.form.get("rolls", p.rolls)
-        new_status = (request.form.get("status") or p.status or "pending").lower()
+        new_status = (request.form.get("status") or ordered_rows[0].status or "pending").lower()
         if new_status not in ("pending","wip","completed"):
             new_status = "pending"
-        p.status = new_status
+        new_rolls = request.form.get("rolls", ordered_rows[0].rolls)
+        
+        for r in ordered_rows:
+            r.ratio = request.form.get(f"ratio_{r.id}", r.ratio)
+            r.rolls = new_rolls
+            r.status = new_status
         db.session.commit()
         return redirect("/program")
-    return render_template("edit_program.html", p=p)
+        
+    return render_template("edit_program.html", rows=ordered_rows, p=ordered_rows[0])
 
 
 @app.route("/edit_program_group", methods=["POST"])
