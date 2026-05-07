@@ -4,9 +4,6 @@ from datetime import datetime
 from collections import defaultdict
 from functools import wraps
 
-import pandas as pd
-from sqlalchemy import create_engine
-
 from flask import (
     Flask, render_template, request, redirect, jsonify, session
 )
@@ -26,10 +23,6 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.secret_key = os.environ.get("SESSION_SECRET", "dev-secret-change-me")
 
 db = SQLAlchemy(app)
-
-# EBO engine
-engine = create_engine(app.config["SQLALCHEMY_DATABASE_URI"])
-actual_df = None
 
 
 # ---------------- PERMISSIONS LIST ----------------
@@ -65,10 +58,6 @@ PERMISSION_GROUPS = [
     ("User Master", [
         ("user_view","View"),("user_add","Add"),
         ("user_edit","Edit"),("user_delete","Delete"),
-    ]),
-    ("EBO Program", [
-        ("ebo_view","View"),("ebo_upload","Upload"),
-        ("ebo_report","Reports"),
     ]),
 ]
 ALL_PERMISSIONS = [code for _, items in PERMISSION_GROUPS for code, _ in items]
@@ -296,42 +285,6 @@ def _grouped_programs():
             "completed_date": g["completed_date"],
         })
     return out
-
-
-# ---------------- EBO FUNCTIONS ----------------
-def load_base():
-    try:
-        # Ensure stock table exists
-        with engine.begin() as conn:
-            conn.exec_driver_sql("""
-                CREATE TABLE IF NOT EXISTS stock (
-                    ebo VARCHAR(255),
-                    product VARCHAR(255),
-                    color VARCHAR(255),
-                    size VARCHAR(255),
-                    base_qty FLOAT
-                )
-            """)
-
-        df = pd.read_sql("SELECT * FROM stock", engine)
-
-        if df.empty:
-            return pd.DataFrame(
-                columns=["ebo", "product", "color", "size", "base_qty"]
-            )
-
-        df["base_qty"] = pd.to_numeric(
-            df["base_qty"],
-            errors="coerce"
-        ).fillna(0)
-
-        return df
-
-    except Exception as e:
-        print("DB Error:", e)
-        return pd.DataFrame(
-            columns=["ebo", "product", "color", "size", "base_qty"]
-        )
 
 
 # ---------------- LOGIN / LOGOUT ----------------
@@ -823,214 +776,6 @@ def delete_program_group():
 @permission_required("overall_view")
 def overall_programs():
     return render_template("overall_programs.html", programs=_grouped_programs())
-
-
-# ---------------- EBO ROUTES ----------------
-@app.route("/ebo")
-@permission_required("ebo_view")
-def ebo_dashboard():
-    df = load_base()
-
-    total_actual_qty = None
-    if actual_df is not None:
-        total_actual_qty = int(actual_df["actual_qty"].sum())
-
-    return render_template(
-        "ebo_dashboard.html",
-        total_ebos=df["ebo"].nunique(),
-        total_products=df["product"].nunique(),
-        total_base_qty=int(df["base_qty"].sum()),
-        total_actual_qty=total_actual_qty
-    )
-
-@app.route('/upload-base', methods=['POST'])
-@permission_required("ebo_upload")
-def upload_base():
-    try:
-        file = request.files['file']
-        if not file:
-            return "No file uploaded", 400
-
-        df = pd.read_excel(file)
-
-        # Clean columns
-        df.columns = [c.lower().strip() for c in df.columns]
-
-        # Rename if needed
-        df = df.rename(columns={
-            "actual_qty": "base_qty"
-        })
-
-        # Keep only required columns
-        required_cols = ["ebo", "product", "color", "size", "base_qty"]
-        missing_cols = [col for col in required_cols if col not in df.columns]
-        if missing_cols:
-            return f"Missing required columns: {', '.join(missing_cols)}", 400
-
-        df = df[required_cols]
-
-        # Ensure stock table exists
-        with engine.begin() as conn:
-            conn.exec_driver_sql("""
-                CREATE TABLE IF NOT EXISTS stock (
-                    ebo VARCHAR(255),
-                    product VARCHAR(255),
-                    color VARCHAR(255),
-                    size VARCHAR(255),
-                    base_qty FLOAT
-                )
-            """)
-
-        # Remove old data
-        with engine.begin() as conn:
-            conn.exec_driver_sql("DELETE FROM stock")
-
-        # Upload new data
-        df.to_sql(
-            "stock",
-            engine,
-            if_exists="append",
-            index=False
-        )
-
-        return redirect('/ebo-base-stock')
-    except Exception as e:
-        return f"Error uploading base stock: {str(e)}", 500
-
-@app.route('/ebo-base-stock')
-@permission_required("ebo_view")
-def ebo_base():
-    df = load_base()
-
-    return render_template(
-        "ebo_base_stock.html",
-        data=df.to_dict("records")
-    )
-
-@app.route('/upload-actual', methods=['POST'])
-@permission_required("ebo_upload")
-def upload_actual():
-    global actual_df
-    try:
-        file = request.files['file']
-        if not file:
-            return "No file uploaded", 400
-
-        actual_df = pd.read_excel(file)
-
-        actual_df.columns = [
-            c.lower().strip()
-            for c in actual_df.columns
-        ]
-
-        actual_df = actual_df.rename(columns={
-            "actual qty": "actual_qty"
-        })
-
-        # Check for required columns
-        if "actual_qty" not in actual_df.columns:
-            return "Missing 'actual_qty' column in Excel file", 400
-
-        return redirect('/ebo-report')
-    except Exception as e:
-        return f"Error uploading actual stock: {str(e)}", 500
-
-@app.route('/ebo-report')
-@permission_required("ebo_report")
-def ebo_report():
-    global actual_df
-
-    df = load_base()
-
-    if actual_df is None:
-        return render_template(
-            "ebo_report.html",
-            data=[]
-        )
-
-    merged = df.merge(
-        actual_df,
-        on=["ebo", "product", "color", "size"],
-        how="left"
-    )
-
-    merged["actual_qty"] = merged["actual_qty"].fillna(0)
-
-    merged["required"] = (
-        merged["base_qty"] -
-        merged["actual_qty"]
-    )
-
-    return render_template(
-        "ebo_report.html",
-        data=merged.to_dict("records")
-    )
-
-@app.route('/ebo-product-report')
-@permission_required("ebo_report")
-def ebo_product_report():
-    global actual_df
-
-    df = load_base()
-
-    if actual_df is None:
-        return render_template(
-            "ebo_product_report.html",
-            data=[]
-        )
-
-    merged = df.merge(
-        actual_df,
-        on=["ebo", "product", "color", "size"],
-        how="left"
-    )
-
-    merged["actual_qty"] = merged["actual_qty"].fillna(0)
-
-    merged["required"] = (
-        merged["base_qty"] -
-        merged["actual_qty"]
-    )
-
-    return render_template(
-        "ebo_product_report.html",
-        data=merged.to_dict("records")
-    )
-
-@app.route('/ebo-excess-stock')
-@permission_required("ebo_report")
-def ebo_excess_stock():
-    global actual_df
-
-    df = load_base()
-
-    if actual_df is None:
-        return render_template(
-            "ebo_excess_stock.html",
-            data=[]
-        )
-
-    merged = df.merge(
-        actual_df,
-        on=["ebo", "product", "color", "size"],
-        how="left"
-    )
-
-    merged["actual_qty"] = merged["actual_qty"].fillna(0)
-
-    merged["excess_qty"] = (
-        merged["actual_qty"] -
-        merged["base_qty"]
-    )
-
-    result = merged[
-        merged["excess_qty"] > 0
-    ]
-
-    return render_template(
-        "ebo_excess_stock.html",
-        data=result.to_dict("records")
-    )
 
 
 # ---------------- STARTUP MIGRATION + ADMIN SEED ----------------
