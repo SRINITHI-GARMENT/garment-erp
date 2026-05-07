@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Manager</title>
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+
+<div class="container">
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+
+        <div>
+
+            <div class="logo">
+                <h2>Stock Manager</h2>
+            </div>
+
+            <div class="menu">
+
+                <a href="/" class="{% if request.path == '/' %}active{% endif %}">
+                    📊 Dashboard
+                </a>
+
+                <a href="/base-stock" class="{% if request.path == '/base-stock' %}active{% endif %}">
+                    📦 Base Stock
+                </a>
+
+                <a href="/ebo-report" class="{% if request.path == '/ebo-report' %}active{% endif %}">
+                    📈 EBO Report
+                </a>
+
+                <a href="/product-report" class="{% if request.path == '/product-report' %}active{% endif %}">
+                    📄 Product Report
+                </a>
+
+                <a href="/excess-stock" class="{% if request.path == '/excess-stock' %}active{% endif %}">
+                    🔀 Excess Stock
+                </a>
+
+            </div>
+
+        </div>
+
+        <div class="sidebar-bottom">
+
+            <form action="/upload-actual" method="post" enctype="multipart/form-data">
+
+                <label class="upload-stock-btn">
+
+                    <input type="file"
+                           name="file"
+                           hidden
+                           onchange="this.form.submit()">
+
+                    ⬆ Upload Actual Stock
+
+                </label>
+
+            </form>
+
+        </div>
+
+    </div>
+
+    <!-- Main -->
+    <div class="main">
+        {% block content %}{% endblock %}
+    </div>
+
+</div>
+
+</body>
+</html>

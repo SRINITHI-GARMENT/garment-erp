@@ -1,0 +1,105 @@
+{% extends "layout.html" %}
+
+{% block content %}
+
+<div class="report-header">
+
+    <div>
+        <h1>Excess Stock Report</h1>
+        <p>Identify items where actual stock exceeds the base target.</p>
+    </div>
+
+    <div class="header-buttons">
+        <button class="light-btn">🖨 Print</button>
+        <button class="dark-btn">⬇ Export</button>
+    </div>
+
+</div>
+
+<div class="warning-box">
+
+    <div>
+        <h4>Missing Data</h4>
+        <p>You need to upload Actual Stock data to view excess inventory.</p>
+    </div>
+
+    <form action="/upload-actual" method="post" enctype="multipart/form-data">
+
+        <label class="upload-stock-btn">
+
+            <input type="file"
+                   name="file"
+                   hidden
+                   onchange="this.form.submit()">
+
+            ⬆ Upload Actual Stock
+
+        </label>
+
+    </form>
+
+</div>
+
+<div class="card">
+
+    <div class="table-top">
+
+        <input type="text"
+               class="search-box"
+               placeholder="Filter by EBO...">
+
+        <input type="text"
+               class="search-box"
+               placeholder="Filter by Product...">
+
+    </div>
+
+    <table>
+
+        <thead>
+            <tr>
+                <th>EBO</th>
+                <th>Product</th>
+                <th>Color</th>
+                <th>Size</th>
+                <th>Base Qty</th>
+                <th>Actual Stock</th>
+                <th class="blue-text">Excess Qty</th>
+            </tr>
+        </thead>
+
+        <tbody>
+
+            {% if data %}
+
+                {% for row in data %}
+
+                <tr>
+                    <td>{{ row.ebo }}</td>
+                    <td>{{ row.product }}</td>
+                    <td>{{ row.color }}</td>
+                    <td>{{ row.size }}</td>
+                    <td>{{ row.base_qty }}</td>
+                    <td>{{ row.actual_stock }}</td>
+                    <td>{{ row.excess_qty }}</td>
+                </tr>
+
+                {% endfor %}
+
+            {% else %}
+
+                <tr>
+                    <td colspan="7" class="empty-row">
+                        Upload actual stock to generate report.
+                    </td>
+                </tr>
+
+            {% endif %}
+
+        </tbody>
+
+    </table>
+
+</div>
+
+{% endblock %}
