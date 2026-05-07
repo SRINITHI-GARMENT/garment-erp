@@ -2,50 +2,65 @@
 <html lang="en">
 
 <head>
+
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EBO Program</title>
 
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
 
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <title>EBO Stock Manager</title>
+
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='ebo_style.css') }}">
+
+    <link rel="preconnect"
+          href="https://fonts.googleapis.com">
+
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+          rel="stylesheet">
+
 </head>
 
 <body>
 
 <div class="container">
 
-    <!-- Sidebar -->
+    <!-- SIDEBAR -->
+
     <div class="sidebar">
 
         <div>
 
             <div class="logo">
-                <h2>SRINITHI GARMENT</h2>
-                <p>EBO Program</p>
-                <a href="/dashboard" class="back-btn">← Back to Cutting Dashboard</a>
+
+                <h2>Stock Manager</h2>
+
             </div>
 
             <div class="menu">
 
-                <a href="/ebo" class="{% if request.path == '/ebo' %}active{% endif %}">
+                <a href="/ebo-dashboard"
+                   class="{% if request.path == '/ebo-dashboard' %}active{% endif %}">
                     📊 Dashboard
                 </a>
 
-                <a href="/ebo-base-stock" class="{% if request.path == '/ebo-base-stock' %}active{% endif %}">
+                <a href="/ebo-base-stock"
+                   class="{% if request.path == '/ebo-base-stock' %}active{% endif %}">
                     📦 Base Stock
                 </a>
 
-                <a href="/ebo-report" class="{% if request.path == '/ebo-report' %}active{% endif %}">
+                <a href="/ebo-report"
+                   class="{% if request.path == '/ebo-report' %}active{% endif %}">
                     📈 EBO Report
                 </a>
 
-                <a href="/ebo-product-report" class="{% if request.path == '/ebo-product-report' %}active{% endif %}">
+                <a href="/ebo-product-report"
+                   class="{% if request.path == '/ebo-product-report' %}active{% endif %}">
                     📄 Product Report
                 </a>
 
-                <a href="/ebo-excess-stock" class="{% if request.path == '/ebo-excess-stock' %}active{% endif %}">
+                <a href="/ebo-excess-stock"
+                   class="{% if request.path == '/ebo-excess-stock' %}active{% endif %}">
                     🔀 Excess Stock
                 </a>
 
@@ -53,9 +68,13 @@
 
         </div>
 
+        <!-- Upload Button -->
+
         <div class="sidebar-bottom">
 
-            <form action="/upload-actual" method="post" enctype="multipart/form-data">
+            <form action="/upload-actual"
+                  method="post"
+                  enctype="multipart/form-data">
 
                 <label class="upload-stock-btn">
 
@@ -74,9 +93,14 @@
 
     </div>
 
-    <!-- Main -->
+    <!-- MAIN -->
+
     <div class="main">
-        {% block content %}{% endblock %}
+
+        {% block content %}
+
+        {% endblock %}
+
     </div>
 
 </div>
