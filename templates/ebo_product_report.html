@@ -1,95 +1,102 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>EBO Product Report</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-</head>
-<body>
+{% extends "ebo_layout.html" %}
 
-<div class="container">
+{% block content %}
 
-    <!-- Sidebar -->
-    <div class="sidebar">
-        <h2>SRINITHI GARMENT</h2>
+<div class="report-header">
 
-        <ul>
-            <li><a href="/dashboard">🏠 Dashboard</a></li>
-            <li class="menu-title">MASTER</li>
-            <li><a href="/colour">🎨 Colour Master</a></li>
-            <li><a href="/size">📏 Size Master</a></li>
-            <li><a href="/fabric">🧵 Fabric Master</a></li>
-            <li><a href="/product">📦 Product Master</a></li>
-            <li><a href="/supplier">🏭 Supplier Master</a></li>
-            <li class="menu-title">PROGRAM</li>
-            <li><a href="/program">📋 Program Entry</a></li>
-            <li><a href="/overall_programs">📊 Overall Programs</a></li>
-            <li><a href="/ebo">📈 EBO Program</a></li>
-            <li class="menu-title">Account</li>
-            <li><a href="/logout">🚪 Logout</a></li>
-        </ul>
-    </div>
-
-    <!-- Main -->
-    <div class="main">
-        <h1>Product Requirement Report 📄</h1>
+    <div>
+        <h1>Product Requirement Report</h1>
         <p>View shortages and excess inventory grouped by product style.</p>
-
-        {% if not data %}
-        <div class="warning">
-            <h4>Missing Data</h4>
-            <p>You need to upload Actual Stock data to view requirements.</p>
-            <form action="/upload-actual" method="post" enctype="multipart/form-data">
-                <label class="btn">
-                    <input type="file" name="file" hidden onchange="this.form.submit()">
-                    ⬆ Upload Actual Stock
-                </label>
-            </form>
-        </div>
-        {% endif %}
-
-        <div class="card">
-            <input type="text" placeholder="Filter by Product...">
-            <input type="text" placeholder="Filter by EBO...">
-
-            <table>
-                <thead>
-                    <tr>
-                        <th>Product</th>
-                        <th>Color</th>
-                        <th>Size</th>
-                        <th>EBO</th>
-                        <th>Base Qty</th>
-                        <th>Actual Stock</th>
-                        <th>Required</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% if data %}
-                        {% for row in data %}
-                        <tr>
-                            <td>{{ row.product }}</td>
-                            <td>{{ row.color }}</td>
-                            <td>{{ row.size }}</td>
-                            <td>{{ row.ebo }}</td>
-                            <td>{{ row.base_qty }}</td>
-                            <td>{{ row.actual_qty }}</td>
-                            <td>{{ row.required }}</td>
-                        </tr>
-                        {% endfor %}
-                    {% else %}
-                        <tr>
-                            <td colspan="7" class="empty">
-                                Upload actual stock to generate report.
-                            </td>
-                        </tr>
-                    {% endif %}
-                </tbody>
-            </table>
-        </div>
     </div>
 
 </div>
 
-</body>
-</html>
+{% if not data %}
+<div class="warning-box">
+
+    <div>
+        <h4>Missing Data</h4>
+        <p>You need to upload Actual Stock data to view requirements.</p>
+    </div>
+
+    <form action="/upload-actual" method="post" enctype="multipart/form-data">
+
+        <label class="upload-stock-btn">
+
+            <input type="file"
+                   name="file"
+                   hidden
+                   onchange="this.form.submit()">
+
+            ⬆ Upload Actual Stock
+
+        </label>
+
+    </form>
+
+</div>
+{% endif %}
+
+<div class="card">
+
+    <div class="table-top">
+
+        <input type="text"
+               class="search-box"
+               placeholder="Filter by Product...">
+
+        <input type="text"
+               class="search-box"
+               placeholder="Filter by EBO...">
+
+    </div>
+
+    <table>
+
+        <thead>
+            <tr>
+                <th>Product</th>
+                <th>Color</th>
+                <th>Size</th>
+                <th>EBO</th>
+                <th>Base Qty</th>
+                <th>Actual Stock</th>
+                <th>Required</th>
+            </tr>
+        </thead>
+
+        <tbody>
+
+            {% if data %}
+
+                {% for row in data %}
+
+                <tr>
+                    <td>{{ row.product }}</td>
+                    <td>{{ row.color }}</td>
+                    <td>{{ row.size }}</td>
+                    <td>{{ row.ebo }}</td>
+                    <td>{{ row.base_qty }}</td>
+                    <td>{{ row.actual_qty }}</td>
+                    <td>{{ row.required }}</td>
+                </tr>
+
+                {% endfor %}
+
+            {% else %}
+
+                <tr>
+                    <td colspan="7" class="empty-row">
+                        Upload actual stock to generate report.
+                    </td>
+                </tr>
+
+            {% endif %}
+
+        </tbody>
+
+    </table>
+
+</div>
+
+{% endblock %}
