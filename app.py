@@ -301,6 +301,18 @@ def _grouped_programs():
 # ---------------- EBO FUNCTIONS ----------------
 def load_base():
     try:
+        # Ensure stock table exists
+        with engine.begin() as conn:
+            conn.exec_driver_sql("""
+                CREATE TABLE IF NOT EXISTS stock (
+                    ebo VARCHAR(255),
+                    product VARCHAR(255),
+                    color VARCHAR(255),
+                    size VARCHAR(255),
+                    base_qty FLOAT
+                )
+            """)
+
         df = pd.read_sql("SELECT * FROM stock", engine)
 
         if df.empty:
@@ -317,7 +329,6 @@ def load_base():
 
     except Exception as e:
         print("DB Error:", e)
-
         return pd.DataFrame(
             columns=["ebo", "product", "color", "size", "base_qty"]
         )
@@ -835,40 +846,56 @@ def ebo_dashboard():
 @app.route('/upload-base', methods=['POST'])
 @permission_required("ebo_upload")
 def upload_base():
-    file = request.files['file']
+    try:
+        file = request.files['file']
+        if not file:
+            return "No file uploaded", 400
 
-    df = pd.read_excel(file)
+        df = pd.read_excel(file)
 
-    # Clean columns
-    df.columns = [c.lower().strip() for c in df.columns]
+        # Clean columns
+        df.columns = [c.lower().strip() for c in df.columns]
 
-    # Rename if needed
-    df = df.rename(columns={
-        "actual_qty": "base_qty"
-    })
+        # Rename if needed
+        df = df.rename(columns={
+            "actual_qty": "base_qty"
+        })
 
-    # Keep only required columns
-    df = df[[
-        "ebo",
-        "product",
-        "color",
-        "size",
-        "base_qty"
-    ]]
+        # Keep only required columns
+        required_cols = ["ebo", "product", "color", "size", "base_qty"]
+        missing_cols = [col for col in required_cols if col not in df.columns]
+        if missing_cols:
+            return f"Missing required columns: {', '.join(missing_cols)}", 400
 
-    # Remove old data
-    with engine.begin() as conn:
-        conn.exec_driver_sql("DELETE FROM stock")
+        df = df[required_cols]
 
-    # Upload new data
-    df.to_sql(
-        "stock",
-        engine,
-        if_exists="append",
-        index=False
-    )
+        # Ensure stock table exists
+        with engine.begin() as conn:
+            conn.exec_driver_sql("""
+                CREATE TABLE IF NOT EXISTS stock (
+                    ebo VARCHAR(255),
+                    product VARCHAR(255),
+                    color VARCHAR(255),
+                    size VARCHAR(255),
+                    base_qty FLOAT
+                )
+            """)
 
-    return redirect('/ebo-base-stock')
+        # Remove old data
+        with engine.begin() as conn:
+            conn.exec_driver_sql("DELETE FROM stock")
+
+        # Upload new data
+        df.to_sql(
+            "stock",
+            engine,
+            if_exists="append",
+            index=False
+        )
+
+        return redirect('/ebo-base-stock')
+    except Exception as e:
+        return f"Error uploading base stock: {str(e)}", 500
 
 @app.route('/ebo-base-stock')
 @permission_required("ebo_view")
@@ -884,21 +911,29 @@ def ebo_base():
 @permission_required("ebo_upload")
 def upload_actual():
     global actual_df
+    try:
+        file = request.files['file']
+        if not file:
+            return "No file uploaded", 400
 
-    file = request.files['file']
+        actual_df = pd.read_excel(file)
 
-    actual_df = pd.read_excel(file)
+        actual_df.columns = [
+            c.lower().strip()
+            for c in actual_df.columns
+        ]
 
-    actual_df.columns = [
-        c.lower().strip()
-        for c in actual_df.columns
-    ]
+        actual_df = actual_df.rename(columns={
+            "actual qty": "actual_qty"
+        })
 
-    actual_df = actual_df.rename(columns={
-        "actual qty": "actual_qty"
-    })
+        # Check for required columns
+        if "actual_qty" not in actual_df.columns:
+            return "Missing 'actual_qty' column in Excel file", 400
 
-    return redirect('/ebo-report')
+        return redirect('/ebo-report')
+    except Exception as e:
+        return f"Error uploading actual stock: {str(e)}", 500
 
 @app.route('/ebo-report')
 @permission_required("ebo_report")
