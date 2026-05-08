@@ -83,10 +83,6 @@ th {
 {% for c, r in colour_rolls.items() %}
 <tr><td>{{ c }}</td><td>{{ r }}</td></tr>
 {% endfor %}
-<tr>
-    <td><b>Total</b></td>
-    <td><b>{{ colour_rolls.values() | sum }}</b></td>
-</tr>
 </table>
 
 <script>
