@@ -229,13 +229,13 @@ def _to_dict_supplier(s):
             "address":s.address,"created_at":s.created_at}
 
 def _next_program_no():
-    counter = Counter.query.get("program")
-    if not counter:
-        counter = Counter(name="program", value=0)
-        db.session.add(counter)
-    counter.value += 1
-    db.session.commit()
-    return f"PRG{counter.value:03d}"
+    result = db.session.execute(
+        text("SELECT nextval('program_no_seq')")
+    )
+
+    next_num = result.scalar()
+
+    return f"PRG{next_num:03d}"
 
 
 def _grouped_programs():
@@ -614,30 +614,63 @@ def program():
     if not u.has("program_view"): return "Access denied.", 403
 
     if request.method == "POST":
-        if not u.has("program_add"): return "Access denied.", 403
+
+    if not u.has("program_add"):
+        return "Access denied.", 403
+
+    try:
+
         program_no = _next_program_no()
+
         date_str = datetime.now().strftime("%d-%m-%Y")
-        fabric = request.form.get("fabric","")
-        dia = request.form.get("dia","")
-        ptype = request.form.get("type","")
-        product = request.form.get("product","")
-        sizes  = request.form.getlist("sizes[]")
+
+        fabric = request.form.get("fabric", "")
+        dia = request.form.get("dia", "")
+        ptype = request.form.get("type", "")
+        product = request.form.get("product", "")
+
+        sizes = request.form.getlist("sizes[]")
         ratios = request.form.getlist("ratios[]")
+
         colors = request.form.getlist("colors[]")
-        rolls  = request.form.getlist("rolls[]")
+        rolls = request.form.getlist("rolls[]")
+
         for ci, color in enumerate(colors):
+
             roll_val = rolls[ci] if ci < len(rolls) else ""
+
             for si, sz in enumerate(sizes):
+
                 ratio_val = ratios[si] if si < len(ratios) else ""
+
                 row = Program(
-                    id=str(uuid.uuid4()), program_no=program_no, date=date_str,
-                    fabric=fabric, dia=dia, type=ptype, product=product,
-                    color=color, size=sz, ratio=ratio_val, rolls=roll_val,
+                    id=str(uuid.uuid4()),
+                    program_no=program_no,
+                    date=date_str,
+                    fabric=fabric,
+                    dia=dia,
+                    type=ptype,
+                    product=product,
+                    color=color,
+                    size=sz,
+                    ratio=ratio_val,
+                    rolls=roll_val,
                     status="pending",
                 )
+
                 db.session.add(row)
+
         db.session.commit()
+
         return redirect("/program")
+
+    except Exception as e:
+
+        db.session.rollback()
+
+        print("PROGRAM SAVE ERROR:", e)
+
+        return f"Error saving program: {str(e)}"
 
     return render_template("program_entry.html",
         fabrics=[_to_dict_fabric(f) for f in Fabric.query.order_by(Fabric.id).all()],
