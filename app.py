@@ -610,12 +610,6 @@ def delete_supplier(sid):
 @app.route("/program", methods=["GET", "POST"])
 @login_required
 def program():
-    u = current_user()
-    if not u.has("program_view"): return "Access denied.", 403
-
-    @app.route("/program", methods=["GET", "POST"])
-@login_required
-def program():
 
     u = current_user()
 
