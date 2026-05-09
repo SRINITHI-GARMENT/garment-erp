@@ -229,12 +229,8 @@ def _to_dict_supplier(s):
             "address":s.address,"created_at":s.created_at}
 
 def _next_program_no():
-    result = db.session.execute(
-        text("SELECT nextval('program_no_seq')")
-    )
-
+    result = db.session.execute(text("SELECT nextval('program_no_seq')"))
     next_num = result.scalar()
-
     return f"PRG{next_num:03d}"
 
 
@@ -824,6 +820,11 @@ def _safe_migrate():
         conn.execute(text("ALTER TABLE programs ADD COLUMN IF NOT EXISTS supplier VARCHAR(120) DEFAULT ''"))
         conn.execute(text("ALTER TABLE programs ADD COLUMN IF NOT EXISTS lot_no VARCHAR(50) DEFAULT ''"))
         conn.execute(text("ALTER TABLE programs ADD COLUMN IF NOT EXISTS completed_date VARCHAR(20) DEFAULT ''"))
+        conn.execute(text("CREATE SEQUENCE IF NOT EXISTS program_no_seq START 1"))
+        conn.execute(text(
+            "SELECT setval('program_no_seq', COALESCE(MAX(NULLIF(regexp_replace(program_no, '\\D', '', 'g'), '')::integer), 0), true)"
+            " FROM programs"
+        ))
 
 def _seed_admin():
     if not User.query.filter_by(username="admin").first():
