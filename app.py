@@ -613,69 +613,81 @@ def program():
     u = current_user()
     if not u.has("program_view"): return "Access denied.", 403
 
-    if request.method == "POST":
+    @app.route("/program", methods=["GET", "POST"])
+@login_required
+def program():
 
-    if not u.has("program_add"):
+    u = current_user()
+
+    if not u.has("program_view"):
         return "Access denied.", 403
 
-    try:
+    if request.method == "POST":
 
-        program_no = _next_program_no()
+        if not u.has("program_add"):
+            return "Access denied.", 403
 
-        date_str = datetime.now().strftime("%d-%m-%Y")
+        try:
 
-        fabric = request.form.get("fabric", "")
-        dia = request.form.get("dia", "")
-        ptype = request.form.get("type", "")
-        product = request.form.get("product", "")
+            program_no = _next_program_no()
 
-        sizes = request.form.getlist("sizes[]")
-        ratios = request.form.getlist("ratios[]")
+            date_str = datetime.now().strftime("%d-%m-%Y")
 
-        colors = request.form.getlist("colors[]")
-        rolls = request.form.getlist("rolls[]")
+            fabric = request.form.get("fabric", "")
+            dia = request.form.get("dia", "")
+            ptype = request.form.get("type", "")
+            product = request.form.get("product", "")
 
-        for ci, color in enumerate(colors):
+            sizes = request.form.getlist("sizes[]")
+            ratios = request.form.getlist("ratios[]")
 
-            roll_val = rolls[ci] if ci < len(rolls) else ""
+            colors = request.form.getlist("colors[]")
+            rolls = request.form.getlist("rolls[]")
 
-            for si, sz in enumerate(sizes):
+            for ci, color in enumerate(colors):
 
-                ratio_val = ratios[si] if si < len(ratios) else ""
+                roll_val = rolls[ci] if ci < len(rolls) else ""
 
-                row = Program(
-                    id=str(uuid.uuid4()),
-                    program_no=program_no,
-                    date=date_str,
-                    fabric=fabric,
-                    dia=dia,
-                    type=ptype,
-                    product=product,
-                    color=color,
-                    size=sz,
-                    ratio=ratio_val,
-                    rolls=roll_val,
-                    status="pending",
-                )
+                for si, sz in enumerate(sizes):
 
-                db.session.add(row)
+                    ratio_val = ratios[si] if si < len(ratios) else ""
 
-        db.session.commit()
+                    row = Program(
+                        id=str(uuid.uuid4()),
+                        program_no=program_no,
+                        date=date_str,
+                        fabric=fabric,
+                        dia=dia,
+                        type=ptype,
+                        product=product,
+                        color=color,
+                        size=sz,
+                        ratio=ratio_val,
+                        rolls=roll_val,
+                        status="pending",
+                    )
 
-        return redirect("/program")
+                    db.session.add(row)
 
-    except Exception as e:
+            db.session.commit()
 
-        db.session.rollback()
+            return redirect("/program")
 
-        print("PROGRAM SAVE ERROR:", e)
+        except Exception as e:
 
-        return f"Error saving program: {str(e)}"
+            db.session.rollback()
 
-    return render_template("program_entry.html",
+            print("PROGRAM SAVE ERROR:", e)
+
+            return f"Error saving program: {str(e)}"
+
+    return render_template(
+        "program_entry.html",
         fabrics=[_to_dict_fabric(f) for f in Fabric.query.order_by(Fabric.id).all()],
         products=[_to_dict_product(p) for p in Product.query.order_by(Product.id).all()],
-        programs=_grouped_programs())
+        programs=_grouped_programs()
+    )
+
 
 
 @app.route("/program/<program_no>")
