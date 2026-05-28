@@ -583,7 +583,11 @@ def _build_requirement_rows_raw():
         for stock_entry in entries_by_fabric.get(fabric_id, []):
             _add_combos(combos, stock_entry.colour, stock_entry.dia)
 
-        matching_wip_rows = [row for row in wip_rows if row.get('fabric_name') == fabric_name and row.get('uom') == fabric_uom and row.get('gsm') == fabric_gsm]
+        matching_wip_rows = [
+            row for row in wip_rows
+            if row.get('fabric_name') == fabric_name
+            and row.get('uom') == fabric_uom
+        ]
         for wip_row in matching_wip_rows:
             _add_combos(combos, wip_row.get('colour', []), wip_row.get('dia', []))
 
@@ -594,6 +598,8 @@ def _build_requirement_rows_raw():
             min_purchase_qty = None
 
             for entry in entries_by_fabric.get(fabric_id, []):
+
+                entry_gsm = entry.gsm or fabric.get('gsm')
                 if not _stock_entry_matches(entry, colour, dia):
                     continue
                 if entry.entry_type == 'base_stock':
@@ -617,7 +623,7 @@ def _build_requirement_rows_raw():
                 'fabric_id': fabric_id,
                 'fabric_name': fabric_name,
                 'uom': fabric_uom,
-                'gsm': fabric_gsm,
+                'gsm': entry_gsm,
                 'colour': [colour] if colour is not None else [],
                 'dia': [dia] if dia is not None else [],
                 'actual_stock': actual,
