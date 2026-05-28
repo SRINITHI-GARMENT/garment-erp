@@ -446,9 +446,110 @@ def filter_stock_rows(rows, selected_filters):
         filtered.append(row)
     return filtered
 
-def get_fabrics():
-    fabrics = Fabric.query.order_by(Fabric.name).all()
-    return [_to_dict_fabric(f) for f in fabrics]
+def _stock_entry_matches(entry, colour, dia):
+    if colour is not None and colour not in entry.colour:
+        return False
+    if dia is not None and dia not in entry.dia:
+        return False
+    return True
+
+
+def _add_combos(combos, colours, dias):
+    if colours and dias:
+        for c in colours:
+            for d in dias:
+                combos.add((c, d))
+    elif colours:
+        for c in colours:
+            combos.add((c, None))
+    elif dias:
+        for d in dias:
+            combos.add((None, d))
+    else:
+        combos.add((None, None))
+
+
+def _build_requirement_rows_raw():
+    fabrics = get_fabrics()
+    stock_entries = StockEntry.query.filter(StockEntry.entry_type.in_(['base_stock', 'actual_stock', 'requirement'])).all()
+    entries_by_fabric = defaultdict(list)
+    for entry in stock_entries:
+        entries_by_fabric[entry.fabric_id].append(entry)
+
+    wip_rows = generated_order_wip_rows()
+    rows = []
+
+    for fabric in fabrics:
+        fabric_id = fabric['id']
+        fabric_name = fabric['name']
+        fabric_uom = fabric.get('uom')
+        fabric_gsm = fabric.get('gsm')
+        combos = set()
+        _add_combos(combos, fabric.get('colour', []), fabric.get('dia', []))
+
+        for stock_entry in entries_by_fabric.get(fabric_id, []):
+            _add_combos(combos, stock_entry.colour, stock_entry.dia)
+
+        matching_wip_rows = [row for row in wip_rows if row.get('fabric_name') == fabric_name and row.get('uom') == fabric_uom and row.get('gsm') == fabric_gsm]
+        for wip_row in matching_wip_rows:
+            _add_combos(combos, wip_row.get('colour', []), wip_row.get('dia', []))
+
+        for colour, dia in combos:
+            base = 0
+            actual = 0
+            req_qty = 0
+            min_purchase_qty = None
+
+            for entry in entries_by_fabric.get(fabric_id, []):
+                if not _stock_entry_matches(entry, colour, dia):
+                    continue
+                if entry.entry_type == 'base_stock':
+                    base += entry.quantity
+                    if entry.min_purchase_qty is not None:
+                        min_purchase_qty = entry.min_purchase_qty if min_purchase_qty is None else min(min_purchase_qty, entry.min_purchase_qty)
+                elif entry.entry_type == 'actual_stock':
+                    actual += entry.quantity
+                elif entry.entry_type == 'requirement':
+                    req_qty += entry.quantity
+
+            wip = 0
+            for wip_row in matching_wip_rows:
+                if colour is not None and wip_row.get('colour') != [colour]:
+                    continue
+                if dia is not None and wip_row.get('dia') != [dia]:
+                    continue
+                wip += wip_row.get('quantity') or 0
+
+            row = {
+                'fabric_id': fabric_id,
+                'fabric_name': fabric_name,
+                'uom': fabric_uom,
+                'gsm': fabric_gsm,
+                'colour': [colour] if colour is not None else [],
+                'dia': [dia] if dia is not None else [],
+                'actual_stock': actual,
+                'wip': wip,
+                'base_stock': base,
+                'min_order_qty': min_purchase_qty or 0,
+                'requirement_detail': actual + wip - base,
+                'quantity': req_qty,
+                'note': '',
+                'created_at': '',
+                'result_type': 'EXCESS' if actual + wip - base > 0 else 'REQUIRED' if actual + wip - base < 0 else 'BALANCED',
+            }
+            rows.append(row)
+
+    return rows
+
+
+def build_requirement_rows(selected_filters=None):
+    rows = _build_requirement_rows_raw()
+    selected_filters = selected_filters or {}
+    rows = filter_stock_rows(rows, selected_filters)
+    result_filter = filter_values(selected_filters, 'result')
+    if result_filter:
+        rows = [r for r in rows if matches_filter(r.get('result_type'), result_filter)]
+    return rows
 
 def get_stock_entries(entry_type, selected_filters=None):
     entries = StockEntry.query.filter(StockEntry.entry_type == entry_type).order_by(StockEntry.created_at.desc()).all()
@@ -1080,9 +1181,13 @@ def stock_entries(entry_type):
     selected_filters = request_filter_values(['fabric', 'uom', 'gsm', 'colour', 'dia', 'result'])
 
     if entry_type == 'requirement':
-        rows = build_requirement_rows(selected_filters)
+        all_rows = _build_requirement_rows_raw()
+        rows = filter_stock_rows(all_rows, selected_filters)
+        result_filter = filter_values(selected_filters, 'result')
+        if result_filter:
+            rows = [r for r in rows if matches_filter(r.get('result_type'), result_filter)]
         total_quantity = sum(r['quantity'] for r in rows)
-        filter_options = build_filter_options(build_requirement_rows({}), include_result=True)
+        filter_options = build_filter_options(all_rows, include_result=True)
     else:
         rows = get_stock_entries(entry_type, selected_filters)
         total_quantity = sum(row['quantity'] for row in rows)
@@ -1250,7 +1355,11 @@ def fabric_orders():
         'status': request_list_arg('report_status'),
     }
 
-    rows = build_requirement_rows(selected_filters)
+    all_rows = _build_requirement_rows_raw()
+    rows = filter_stock_rows(all_rows, selected_filters)
+    result_filter = filter_values(selected_filters, 'result')
+    if result_filter:
+        rows = [r for r in rows if matches_filter(r.get('result_type'), result_filter)]
     frozen_orders = session.get('fabric_orders', [])
     frozen_map = {
         (
@@ -1373,7 +1482,11 @@ def fabric_orders():
 
     def rows_excluding(filter_key):
         temp_filters = {k: v for k, v in selected_filters.items() if k != filter_key}
-        return build_requirement_rows(temp_filters)
+        temp_rows = filter_stock_rows(all_rows, temp_filters)
+        result_filter = filter_values(temp_filters, 'result')
+        if result_filter:
+            temp_rows = [r for r in temp_rows if matches_filter(r.get('result_type'), result_filter)]
+        return temp_rows
 
     all_fabrics = sorted({r['fabric_name'] for r in rows_excluding('fabric')})
     all_uoms = sorted({r['uom'] for r in rows_excluding('uom') if r['uom']})
