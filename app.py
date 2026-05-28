@@ -446,6 +446,98 @@ def filter_stock_rows(rows, selected_filters):
         filtered.append(row)
     return filtered
 
+
+def get_fabrics():
+    fabrics = Fabric.query.order_by(Fabric.name).all()
+    return [_to_dict_fabric(f) for f in fabrics]
+
+
+def get_stock_entries(entry_type, selected_filters=None):
+    entries = StockEntry.query.filter(StockEntry.entry_type == entry_type).order_by(StockEntry.created_at.desc()).all()
+    parsed_rows = []
+    for entry in entries:
+        fabric = entry.fabric
+        row_dict = {
+            'id': entry.id,
+            'fabric_id': entry.fabric_id,
+            'entry_type': entry.entry_type,
+            'quantity': entry.quantity,
+            'note': entry.note,
+            'colour': entry.colour,
+            'dia': entry.dia,
+            'min_purchase_qty': entry.min_purchase_qty,
+            'created_at': entry.created_at.isoformat() if entry.created_at else None,
+            'fabric_name': fabric.name if fabric else None,
+            'uom': fabric.uom if fabric else None,
+            'gsm': fabric.gsm if fabric else None,
+            'fabric_colour': fabric.colour if fabric else [],
+            'fabric_dia': fabric.dia if fabric else [],
+        }
+        parsed_rows.append(row_dict)
+    return filter_stock_rows(parsed_rows, selected_filters or {})
+
+
+def order_item_process(order, item):
+    return {
+        'process_type': item.get('process_type') or order.get('process_type') or '',
+        'process': item.get('process') or order.get('process') or '',
+        'fabric_incharge': item.get('fabric_incharge') or order.get('fabric_incharge') or '',
+    }
+
+
+def generated_order_wip_rows():
+    rows = []
+    orders = GeneratedOrder.query.filter(
+        (GeneratedOrder.status.is_(None)) | (GeneratedOrder.status != 'Completed')
+    ).order_by(GeneratedOrder.created_at.desc()).all()
+    
+    for order in orders:
+        order_dict = {
+            'id': order.id,
+            'po_number': order.po_number,
+            'process_type': order.process_type or '',
+            'process': order.process or '',
+            'fabric_incharge': order.fabric_incharge or '',
+            'status': order.status or 'Pending',
+        }
+        
+        for index, item in enumerate(json.loads(order.order_items or '[]')):
+            process_data = order_item_process(order_dict, item)
+            rows.append({
+                'order_id': order.id,
+                'item_index': index,
+                'po_number': order.po_number,
+                'fabric_name': item.get('fabric_name'),
+                'uom': item.get('uom'),
+                'gsm': item.get('gsm'),
+                'colour': item.get('colour', []),
+                'dia': item.get('dia', []),
+                'quantity': float(item.get('order_qty') or 0),
+                'process_type': process_data['process_type'],
+                'process': process_data['process'],
+                'fabric_incharge': process_data['fabric_incharge'],
+                'status': order.status or 'Pending',
+            })
+    return rows
+
+
+def get_order_wip_quantity(fabric_name, uom, gsm, colour, dia):
+    total = 0.0
+    target_colour = [c for c in ([colour] if isinstance(colour, str) else colour or []) if c]
+    target_dia = [d for d in ([dia] if isinstance(dia, str) else dia or []) if d]
+    for row in generated_order_wip_rows():
+        if row.get('fabric_name') != fabric_name:
+            continue
+        if row.get('uom') != uom or row.get('gsm') != gsm:
+            continue
+        if target_colour and row.get('colour') != target_colour:
+            continue
+        if target_dia and row.get('dia') != target_dia:
+            continue
+        total += row.get('quantity') or 0
+    return total
+
+
 def _stock_entry_matches(entry, colour, dia):
     if colour is not None and colour not in entry.colour:
         return False
@@ -549,237 +641,6 @@ def build_requirement_rows(selected_filters=None):
     result_filter = filter_values(selected_filters, 'result')
     if result_filter:
         rows = [r for r in rows if matches_filter(r.get('result_type'), result_filter)]
-    return rows
-
-def get_stock_entries(entry_type, selected_filters=None):
-    entries = StockEntry.query.filter(StockEntry.entry_type == entry_type).order_by(StockEntry.created_at.desc()).all()
-    parsed_rows = []
-    for entry in entries:
-        fabric = entry.fabric
-        row_dict = {
-            'id': entry.id,
-            'fabric_id': entry.fabric_id,
-            'entry_type': entry.entry_type,
-            'quantity': entry.quantity,
-            'note': entry.note,
-            'colour': entry.colour,
-            'dia': entry.dia,
-            'min_purchase_qty': entry.min_purchase_qty,
-            'created_at': entry.created_at.isoformat() if entry.created_at else None,
-            'fabric_name': fabric.name if fabric else None,
-            'uom': fabric.uom if fabric else None,
-            'gsm': fabric.gsm if fabric else None,
-            'fabric_colour': fabric.colour if fabric else [],
-            'fabric_dia': fabric.dia if fabric else [],
-        }
-        parsed_rows.append(row_dict)
-    return filter_stock_rows(parsed_rows, selected_filters or {})
-
-def order_item_process(order, item):
-    return {
-        'process_type': item.get('process_type') or order.get('process_type') or '',
-        'process': item.get('process') or order.get('process') or '',
-        'fabric_incharge': item.get('fabric_incharge') or order.get('fabric_incharge') or '',
-    }
-
-def generated_order_wip_rows():
-    rows = []
-    orders = GeneratedOrder.query.filter(
-        (GeneratedOrder.status.is_(None)) | (GeneratedOrder.status != 'Completed')
-    ).order_by(GeneratedOrder.created_at.desc()).all()
-    
-    for order in orders:
-        order_dict = {
-            'id': order.id,
-            'po_number': order.po_number,
-            'process_type': order.process_type or '',
-            'process': order.process or '',
-            'fabric_incharge': order.fabric_incharge or '',
-            'status': order.status or 'Pending',
-        }
-        
-        for index, item in enumerate(json.loads(order.order_items or '[]')):
-            process_data = order_item_process(order_dict, item)
-            rows.append({
-                'order_id': order.id,
-                'item_index': index,
-                'po_number': order.po_number,
-                'fabric_name': item.get('fabric_name'),
-                'uom': item.get('uom'),
-                'gsm': item.get('gsm'),
-                'colour': item.get('colour', []),
-                'dia': item.get('dia', []),
-                'quantity': float(item.get('order_qty') or 0),
-                'process_type': process_data['process_type'],
-                'process': process_data['process'],
-                'fabric_incharge': process_data['fabric_incharge'],
-                'status': order.status or 'Pending',
-            })
-    return rows
-
-def get_order_wip_quantity(fabric_name, uom, gsm, colour, dia):
-    total = 0.0
-    target_colour = [c for c in ([colour] if isinstance(colour, str) else colour or []) if c]
-    target_dia = [d for d in ([dia] if isinstance(dia, str) else dia or []) if d]
-    for row in generated_order_wip_rows():
-        if row.get('fabric_name') != fabric_name:
-            continue
-        if row.get('uom') != uom or row.get('gsm') != gsm:
-            continue
-        if target_colour and row.get('colour') != target_colour:
-            continue
-        if target_dia and row.get('dia') != target_dia:
-            continue
-        total += row.get('quantity') or 0
-    return total
-
-def build_requirement_rows(selected_filters=None):
-    fabrics = get_fabrics()
-    selected_filters = selected_filters or {}
-    
-    rows = []
-    for fabric in fabrics:
-        fabric_id = fabric['id']
-        fabric_colours = fabric.get('colour', [])
-        fabric_dias = fabric.get('dia', [])
-
-        combos = set()
-        def add_combo(c, d):
-            combos.add((c, d))
-
-        if fabric_colours and fabric_dias:
-            for c in fabric_colours:
-                for d in fabric_dias:
-                    add_combo(c, d)
-        elif fabric_colours:
-            for c in fabric_colours:
-                add_combo(c, None)
-        elif fabric_dias:
-            for d in fabric_dias:
-                add_combo(None, d)
-        else:
-            add_combo(None, None)
-
-        stock_entries_q = StockEntry.query.filter(
-            StockEntry.fabric_id == fabric_id,
-            StockEntry.entry_type.in_(['base_stock', 'actual_stock'])
-        ).all()
-        
-        for stock_entry in stock_entries_q:
-            stock_colours = stock_entry.colour
-            stock_dias = stock_entry.dia
-            if stock_colours and stock_dias:
-                for c in stock_colours:
-                    for d in stock_dias:
-                        add_combo(c, d)
-            elif stock_colours:
-                for c in stock_colours:
-                    add_combo(c, None)
-            elif stock_dias:
-                for d in stock_dias:
-                    add_combo(None, d)
-            else:
-                add_combo(None, None)
-
-        for wip_row in generated_order_wip_rows():
-            if (
-                wip_row.get('fabric_name') != fabric['name'] or
-                wip_row.get('uom') != fabric.get('uom') or
-                wip_row.get('gsm') != fabric.get('gsm')
-            ):
-                continue
-            wip_colours = wip_row.get('colour') or []
-            wip_dias = wip_row.get('dia') or []
-            if wip_colours and wip_dias:
-                for c in wip_colours:
-                    for d in wip_dias:
-                        add_combo(c, d)
-            elif wip_colours:
-                for c in wip_colours:
-                    add_combo(c, None)
-            elif wip_dias:
-                for d in wip_dias:
-                    add_combo(None, d)
-            else:
-                add_combo(None, None)
-
-        for colour, dia in combos:
-            colour_pattern = None
-            dia_pattern = None
-            
-            base_q = db.session.query(db.func.coalesce(db.func.sum(StockEntry.quantity), 0)).filter(
-                StockEntry.fabric_id == fabric_id,
-                StockEntry.entry_type == 'base_stock'
-            )
-            actual_q = db.session.query(db.func.coalesce(db.func.sum(StockEntry.quantity), 0)).filter(
-                StockEntry.fabric_id == fabric_id,
-                StockEntry.entry_type == 'actual_stock'
-            )
-            req_q = db.session.query(db.func.coalesce(db.func.sum(StockEntry.quantity), 0)).filter(
-                StockEntry.fabric_id == fabric_id,
-                StockEntry.entry_type == 'requirement'
-            )
-
-            if colour is not None:
-                colour_pattern = '%' + str(colour) + '%'
-                base_q = base_q.filter(StockEntry.colour_csv.like(colour_pattern))
-                actual_q = actual_q.filter(StockEntry.colour_csv.like(colour_pattern))
-                req_q = req_q.filter(StockEntry.colour_csv.like(colour_pattern))
-            if dia is not None:
-                dia_pattern = '%' + str(dia) + '%'
-                base_q = base_q.filter(StockEntry.dia_csv.like(dia_pattern))
-                actual_q = actual_q.filter(StockEntry.dia_csv.like(dia_pattern))
-                req_q = req_q.filter(StockEntry.dia_csv.like(dia_pattern))
-
-            base = base_q.scalar() or 0
-            actual = actual_q.scalar() or 0
-            req_qty = req_q.scalar() or 0
-            
-            wip = get_order_wip_quantity(
-                fabric['name'],
-                fabric.get('uom'),
-                fabric.get('gsm'),
-                [colour] if colour is not None else [],
-                [dia] if dia is not None else [],
-            )
-            
-            req_detail = actual + wip - base
-
-            min_purchase_q = db.session.query(db.func.coalesce(db.func.min(StockEntry.min_purchase_qty), 0)).filter(
-                StockEntry.fabric_id == fabric_id,
-                StockEntry.entry_type == 'base_stock'
-            )
-            if colour is not None:
-                min_purchase_q = min_purchase_q.filter(StockEntry.colour_csv.like(colour_pattern))
-            if dia is not None:
-                min_purchase_q = min_purchase_q.filter(StockEntry.dia_csv.like(dia_pattern))
-
-            min_purchase_qty = min_purchase_q.scalar() or 0
-
-            row = {
-                'fabric_id': fabric_id,
-                'fabric_name': fabric['name'],
-                'uom': fabric.get('uom'),
-                'gsm': fabric.get('gsm'),
-                'colour': [colour] if colour is not None else [],
-                'dia': [dia] if dia is not None else [],
-                'actual_stock': actual,
-                'wip': wip,
-                'base_stock': base,
-                'min_order_qty': min_purchase_qty,
-                'requirement_detail': req_detail,
-                'quantity': req_qty,
-                'note': '',
-                'created_at': '',
-                'result_type': 'EXCESS' if req_detail > 0 else 'REQUIRED' if req_detail < 0 else 'BALANCED',
-            }
-            rows.append(row)
-
-    rows = filter_stock_rows(rows, selected_filters)
-    result_filter = filter_values(selected_filters, 'result')
-    if result_filter:
-        rows = [r for r in rows if matches_filter(r.get('result_type'), result_filter)]
-
     return rows
 
 
