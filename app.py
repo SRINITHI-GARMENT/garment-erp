@@ -597,6 +597,8 @@ def _build_requirement_rows_raw():
             req_qty = 0
             min_purchase_qty = None
 
+            entry_gsm = fabric.get('gsm')
+
             for entry in entries_by_fabric.get(fabric_id, []):
 
                 entry_gsm = entry.gsm or fabric.get('gsm')
