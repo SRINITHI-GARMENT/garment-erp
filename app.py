@@ -547,19 +547,19 @@ def _stock_entry_matches(entry, colour, dia):
     return True
 
 
-def _add_combos(combos, colours, dias):
+def _add_combos(combos, colours, dias, gsm):
     if colours and dias:
         for c in colours:
             for d in dias:
-                combos.add((c, d))
+                combos.add((c, d, gsm))
     elif colours:
         for c in colours:
-            combos.add((c, None))
+            combos.add((c, None, gsm))
     elif dias:
         for d in dias:
-            combos.add((None, d))
+            combos.add((None, d, gsm))
     else:
-        combos.add((None, None))
+        combos.add((None, None, gsm))
 
 
 def _build_requirement_rows_raw():
@@ -578,10 +578,10 @@ def _build_requirement_rows_raw():
         fabric_uom = fabric.get('uom')
         fabric_gsm = fabric.get('gsm')
         combos = set()
-        _add_combos(combos, fabric.get('colour', []), fabric.get('dia', []))
+        _add_combos(combos, fabric.get('colour', []), fabric.get('dia', []), fabric.get('gsm'))
 
         for stock_entry in entries_by_fabric.get(fabric_id, []):
-            _add_combos(combos, stock_entry.colour, stock_entry.dia)
+            _add_combos(combos, stock_entry.colour, stock_entry.dia, stock_entry.gsm or fabric.get('gsm'))
 
         matching_wip_rows = [
             row for row in wip_rows
@@ -589,9 +589,14 @@ def _build_requirement_rows_raw():
             and row.get('uom') == fabric_uom
         ]
         for wip_row in matching_wip_rows:
-            _add_combos(combos, wip_row.get('colour', []), wip_row.get('dia', []))
+            _add_combos(
+                combos,
+                wip_row.get('colour', []),
+                wip_row.get('dia', []),
+                wip_row.get('gsm')
+            )
 
-        for colour, dia in combos:
+        for colour, dia, combo_gsm in combos:
             base = 0
             actual = 0
             req_qty = 0
@@ -625,7 +630,7 @@ def _build_requirement_rows_raw():
                 'fabric_id': fabric_id,
                 'fabric_name': fabric_name,
                 'uom': fabric_uom,
-                'gsm': entry_gsm,
+                'gsm': combo_gsm,
                 'colour': [colour] if colour is not None else [],
                 'dia': [dia] if dia is not None else [],
                 'actual_stock': actual,
