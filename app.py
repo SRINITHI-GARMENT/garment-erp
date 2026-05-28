@@ -570,7 +570,7 @@ def _build_requirement_rows_raw():
         entries_by_fabric[entry.fabric_id].append(entry)
 
     wip_rows = generated_order_wip_rows()
-    rows = []
+    rows_dict = {}
 
     for fabric in fabrics:
         fabric_id = fabric['id']
@@ -583,13 +583,13 @@ def _build_requirement_rows_raw():
         for stock_entry in entries_by_fabric.get(fabric_id, []):
             _add_combos(combos, stock_entry.colour, stock_entry.dia, stock_entry.gsm or fabric.get('gsm'))
 
+        
         matching_wip_rows = [
             row for row in wip_rows
             if row.get('fabric_name') == fabric_name
             and row.get('uom') == fabric_uom
-            and row.get('gsm') == combo_gsm
         ]
-        
+
         for wip_row in matching_wip_rows:
             _add_combos(
                 combos,
@@ -599,6 +599,17 @@ def _build_requirement_rows_raw():
             )
 
         for colour, dia, combo_gsm in combos:
+            matching_wip_rows = [
+                row for row in wip_rows
+                if row.get('fabric_name') == fabric_name
+                and row.get('uom') == fabric_uom
+                and row.get('gsm') == combo_gsm
+                and (
+                    (colour is None or row.get('colour') == [colour])
+                    and
+                    (dia is None or row.get('dia') == [dia])
+                )
+            ]
             base = 0
             actual = 0
             req_qty = 0
@@ -609,6 +620,9 @@ def _build_requirement_rows_raw():
             for entry in entries_by_fabric.get(fabric_id, []):
 
                 entry_gsm = entry.gsm or fabric.get('gsm')
+
+                if entry_gsm != combo_gsm:
+                    continue
                 if not _stock_entry_matches(entry, colour, dia):
                     continue
                 if entry.entry_type == 'base_stock':
@@ -620,13 +634,15 @@ def _build_requirement_rows_raw():
                 elif entry.entry_type == 'requirement':
                     req_qty += entry.quantity
 
-            wip = 0
-            for wip_row in matching_wip_rows:
-                if colour is not None and wip_row.get('colour') != [colour]:
-                    continue
-                if dia is not None and wip_row.get('dia') != [dia]:
-                    continue
-                wip += wip_row.get('quantity') or 0
+            wip = sum(w.get('quantity') or 0 for w in matching_wip_rows)
+
+            key = (
+                fabric_name,
+                fabric_uom,
+                combo_gsm,
+                str(colour).strip(),
+                str(dia).strip()
+            )    
 
             row = {
                 'fabric_id': fabric_id,
@@ -645,9 +661,20 @@ def _build_requirement_rows_raw():
                 'created_at': '',
                 'result_type': 'EXCESS' if actual + wip - base > 0 else 'REQUIRED' if actual + wip - base < 0 else 'BALANCED',
             }
-            rows.append(row)
+            if key not in rows_dict:
+                rows_dict[key] = row
+            else:
+                rows_dict[key]['actual_stock'] += actual
+                rows_dict[key]['wip'] += wip
+                rows_dict[key]['base_stock'] += base
+                rows_dict[key]['quantity'] += req_qty
+                rows_dict[key]['requirement_detail'] = (
+                    rows_dict[key]['actual_stock']
+                    + rows_dict[key]['wip']
+                    - rows_dict[key]['base_stock']
+                )
 
-    return rows
+    return list(rows_dict.values())
 
 
 def build_requirement_rows(selected_filters=None):
