@@ -587,7 +587,9 @@ def _build_requirement_rows_raw():
             row for row in wip_rows
             if row.get('fabric_name') == fabric_name
             and row.get('uom') == fabric_uom
+            and row.get('gsm') == combo_gsm
         ]
+        
         for wip_row in matching_wip_rows:
             _add_combos(
                 combos,
