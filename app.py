@@ -209,6 +209,7 @@ class StockEntry(db.Model):
     dia_csv = db.Column('dia', db.Text, default='')  # CSV format stored in the DB column named dia
     min_purchase_qty = db.Column(db.Float)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    gsm = db.Column(db.String(50))
     
     fabric = db.relationship('Fabric', backref='stock_entries')
     
@@ -469,7 +470,7 @@ def get_stock_entries(entry_type, selected_filters=None):
             'created_at': entry.created_at.isoformat() if entry.created_at else None,
             'fabric_name': fabric.name if fabric else None,
             'uom': fabric.uom if fabric else None,
-            'gsm': fabric.gsm if fabric else None,
+            'gsm': entry.gsm or (fabric.gsm if fabric else None),
             'fabric_colour': fabric.colour if fabric else [],
             'fabric_dia': fabric.dia if fabric else [],
         }
@@ -652,6 +653,8 @@ def import_stock_excel(file_stream, entry_type, replace=False):
     for index, name in enumerate(headers):
         if 'fabric' in name:
             mapping['fabric'] = index
+        elif 'gsm' in name:
+            mapping['gsm'] = index  
         elif 'quantity' in name:
             mapping['quantity'] = index
         elif 'note' in name:
@@ -699,9 +702,12 @@ def import_stock_excel(file_stream, entry_type, replace=False):
             quantity = float(quantity_value)
         except (TypeError, ValueError):
             return f'Invalid quantity for fabric {fabric_name}. Must be a number.'
+        
+        gsm_value = str(row[mapping['gsm']]).strip() if 'gsm' in mapping else ''
 
         entry = StockEntry(
             fabric_id=fabric_names[fabric_name],
+            gsm=gsm_value,
             entry_type=entry_type,
             quantity=quantity,
             note=note_value,
@@ -1018,6 +1024,7 @@ def stock_entries(entry_type):
                         entry = StockEntry.query.get(edit_id)
                         if entry:
                             entry.fabric_id = int(fabric_id)
+                            entry.gsm = request.form.get('gsm', '').strip()
                             entry.quantity = quantity_value
                             entry.note = note
                             entry.colour = [colour_value] if colour_value else []
@@ -1026,6 +1033,7 @@ def stock_entries(entry_type):
                     else:
                         entry = StockEntry(
                             fabric_id=int(fabric_id),
+                            gsm=request.form.get('gsm', '').strip(),
                             entry_type=entry_type,
                             quantity=quantity_value,
                             note=note,
