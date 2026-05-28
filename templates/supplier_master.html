@@ -8,29 +8,7 @@
 
 <div class="container">
 
-<div class="sidebar">
-    <h2>SRINITHI GARMENT</h2>
-    {% if current_user %}
-    <p style="color:#fff;font-size:13px;margin:0 0 10px 0;">
-        Logged in as: <b>{{ current_user.username }}</b> ({{ current_user.role }})
-    </p>
-    {% endif %}
-    <ul>
-        <li><a href="/dashboard">🏠 Dashboard</a></li>
-        <li class="menu-title">MASTER</li>
-        <li><a href="/colour">🎨 Colour Master</a></li>
-        <li><a href="/size">📏 Size Master</a></li>
-        <li><a href="/fabric">🧵 Fabric Master</a></li>
-        <li><a href="/product">📦 Product Master</a></li>
-        <li><a href="/supplier">🏭 Supplier Master</a></li>
-        <li><a href="/users">👥 User Master</a></li>
-        <li class="menu-title">PROGRAM</li>
-        <li><a href="/program">📋 Program Entry</a></li>
-        <li><a href="/overall_programs">📊 Overall Programs</a></li>
-        <li class="menu-title">ACCOUNT</li>
-        <li><a href="/logout">🚪 Logout</a></li>
-    </ul>
-</div>
+{% include 'sidebar.html' %}
 
 <div class="main">
 <h2>SUPPLIER MASTER</h2>
@@ -46,7 +24,7 @@
         <input name="contact" placeholder="Phone / Email"></div>
     <div class="form-group"><label>Address</label>
         <input name="address"></div>
-    <button type="submit">Save Supplier</button>
+    <button type="submit" class="btn edit">Save Supplier</button>
 </form>
 </div>
 {% endif %}
@@ -57,8 +35,8 @@
     <input name="search" value="{{ f_search }}" placeholder="Search Name">
     <input name="code" value="{{ f_code }}" placeholder="Code">
     <input name="contact" value="{{ f_contact }}" placeholder="Contact">
-    <button type="submit">Filter</button>
-    <a href="/supplier"><button type="button">Reset</button></a>
+    <button type="submit" class="btn edit">Filter</button>
+    <a href="/supplier"><button type="button" class="btn secondary">Reset</button></a>
 </form>
 </div>
 

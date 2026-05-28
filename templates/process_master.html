@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{ title }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        .process-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1.3fr;
+            gap: 24px;
+            align-items: start;
+            margin-top: 24px;
+        }
+        @media (max-width: 1200px) {
+            .process-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        .process-card {
+            background: #ffffff;
+            padding: 20px;
+            border-radius: 14px;
+            box-shadow: 0 10px 25px rgba(10, 40, 60, 0.05);
+            border: 1px solid #e2e8f0;
+        }
+        .process-card h2 {
+            margin-top: 0;
+            margin-bottom: 16px;
+            font-size: 18px;
+            color: #0b3a4e;
+            border-bottom: 2px solid #edf2f7;
+            padding-bottom: 8px;
+        }
+        .success-alert {
+            margin: 16px 0;
+            padding: 14px 18px;
+            background: #e6fffa;
+            border-left: 4px solid #319795;
+            color: #234e52;
+            border-radius: 8px;
+        }
+        .form-compact {
+            background: #f8fafc;
+            padding: 16px;
+            border-radius: 10px;
+            border: 1px solid #e2e8f0;
+            margin-bottom: 20px;
+            max-width: 100%;
+            box-shadow: none;
+        }
+        .form-compact label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 600;
+            font-size: 13px;
+            color: #4a5568;
+        }
+        .form-compact input, .form-compact select {
+            width: 100%;
+            padding: 8px 10px;
+            margin-bottom: 12px;
+            border: 1px solid #cbd5e0;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        .form-compact input:focus, .form-compact select:focus {
+            outline: none;
+            border-color: #0d7b9d;
+            box-shadow: 0 0 0 3px rgba(13, 123, 157, 0.15);
+        }
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 13px;
+            border-radius: 6px;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    {% include 'sidebar.html' %}
+
+    <div class="main">
+        <h1>{{ title }}</h1>
+        <p>Manage fabric processing parameters, workflow types, and fabric incharge assignments in one consolidated view.</p>
+
+        {% if error %}
+            <div class="alert">{{ error }}</div>
+        {% endif %}
+        {% if success %}
+            <div class="success-alert">{{ success }}</div>
+        {% endif %}
+
+        <div class="process-grid">
+            <!-- 1. FABRIC INCHARGE -->
+            <div class="process-card">
+                <h2>Fabric Incharge</h2>
+                
+                <form id="inchargeForm" method="POST" action="/process_master/fabric_incharge/save" class="form-compact">
+                    <input type="hidden" name="id" id="incharge_edit_id" value="">
+                    
+                    <label for="incharge_name">Incharge Name</label>
+                    <input type="text" name="name" id="incharge_name" placeholder="e.g. John Doe" required autocomplete="off">
+                    
+                    <div style="display: flex; gap: 8px;">
+                        <button type="submit" id="incharge_submit_btn" class="btn edit btn-sm" style="flex: 1;">Add Incharge</button>
+                        <button type="button" id="incharge_cancel_btn" class="btn secondary btn-sm" onclick="cancelInchargeEdit()" style="display: none;">Cancel</button>
+                    </div>
+                </form>
+
+                <div class="table-wrapper">
+                    <table class="data-table" style="font-size: 13px; margin-top: 0;">
+                        <thead>
+                            <tr>
+                                <th style="padding: 8px 10px; width: 50px;">S.No</th>
+                                <th style="padding: 8px 10px;">Name</th>
+                                <th style="padding: 8px 10px; width: 110px;">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for fi in incharges %}
+                            <tr>
+                                <td style="padding: 8px 10px;">{{ loop.index }}</td>
+                                <td style="padding: 8px 10px;">{{ fi.name }}</td>
+                                <td style="padding: 8px 10px; white-space: nowrap;">
+                                    <button type="button" class="btn edit btn-sm" style="padding: 3px 6px; border-radius: 4px;" onclick="editIncharge('{{ fi.id }}', '{{ fi.name | escape }}')">Edit</button>
+                                    <form action="/process_master/fabric_incharge/delete/{{ fi.id }}" method="POST" style="display: inline-block; margin: 0;" onsubmit="return confirm('Delete this fabric incharge?')">
+                                        <button type="submit" class="btn delete btn-sm" style="padding: 3px 6px; border-radius: 4px;">Delete</button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="3" style="text-align: center; color: #a0aec0; padding: 12px;">No records</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 2. PROCESS -->
+            <div class="process-card">
+                <h2>Process</h2>
+                
+                <form id="processForm" method="POST" action="/process_master/process/save" class="form-compact">
+                    <input type="hidden" name="id" id="process_edit_id" value="">
+                    
+                    <label for="process_name">Process Name</label>
+                    <input type="text" name="name" id="process_name" placeholder="e.g. Dyeing, Drying" required autocomplete="off">
+                    
+                    <div style="display: flex; gap: 8px;">
+                        <button type="submit" id="process_submit_btn" class="btn edit btn-sm" style="flex: 1;">Add Process</button>
+                        <button type="button" id="process_cancel_btn" class="btn secondary btn-sm" onclick="cancelProcessEdit()" style="display: none;">Cancel</button>
+                    </div>
+                </form>
+
+                <div class="table-wrapper">
+                    <table class="data-table" style="font-size: 13px; margin-top: 0;">
+                        <thead>
+                            <tr>
+                                <th style="padding: 8px 10px; width: 50px;">S.No</th>
+                                <th style="padding: 8px 10px;">Process</th>
+                                <th style="padding: 8px 10px; width: 110px;">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for p in processes %}
+                            <tr>
+                                <td style="padding: 8px 10px;">{{ loop.index }}</td>
+                                <td style="padding: 8px 10px;">{{ p.name }}</td>
+                                <td style="padding: 8px 10px; white-space: nowrap;">
+                                    <button type="button" class="btn edit btn-sm" style="padding: 3px 6px; border-radius: 4px;" onclick="editProcess('{{ p.id }}', '{{ p.name | escape }}')">Edit</button>
+                                    <form action="/process_master/process/delete/{{ p.id }}" method="POST" style="display: inline-block; margin: 0;" onsubmit="return confirm('Delete this process?')">
+                                        <button type="submit" class="btn delete btn-sm" style="padding: 3px 6px; border-radius: 4px;">Delete</button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="3" style="text-align: center; color: #a0aec0; padding: 12px;">No records</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 3. PROCESS DETAILS -->
+            <div class="process-card">
+                <h2>Process Details</h2>
+                
+                <form id="detailsForm" method="POST" action="/process_master/process_details/save" class="form-compact">
+                    <input type="hidden" name="id" id="details_edit_id" value="">
+                    
+                    <label for="details_type">Process Type</label>
+                    <select name="process_type" id="details_type" required>
+                        <option value="OWN PROCESS">OWN PROCESS</option>
+                        <option value="FABRIC PURCHASE">FABRIC PURCHASE</option>
+                    </select>
+
+                    <label for="details_process">Process</label>
+                    <select name="process_id" id="details_process" required>
+                        <option value="">-- Select Process --</option>
+                        {% for p in processes %}
+                        <option value="{{ p.id }}">{{ p.name }}</option>
+                        {% endfor %}
+                    </select>
+
+                    <label for="details_incharge">Fabric Incharge</label>
+                    <select name="fabric_incharge_id" id="details_incharge" required>
+                        <option value="">-- Select Incharge --</option>
+                        {% for fi in incharges %}
+                        <option value="{{ fi.id }}">{{ fi.name }}</option>
+                        {% endfor %}
+                    </select>
+                    
+                    <div style="display: flex; gap: 8px;">
+                        <button type="submit" id="details_submit_btn" class="btn edit btn-sm" style="flex: 1;">Add Details</button>
+                        <button type="button" id="details_cancel_btn" class="btn secondary btn-sm" onclick="cancelDetailsEdit()" style="display: none;">Cancel</button>
+                    </div>
+                </form>
+
+                <div class="table-wrapper">
+                    <table class="data-table" style="font-size: 13px; margin-top: 0;">
+                        <thead>
+                            <tr>
+                                <th style="padding: 8px 8px; width: 40px;">S.No</th>
+                                <th style="padding: 8px 8px;">Process Type</th>
+                                <th style="padding: 8px 8px;">Process</th>
+                                <th style="padding: 8px 8px;">Incharge</th>
+                                <th style="padding: 8px 8px; width: 110px;">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for d in details %}
+                            <tr>
+                                <td style="padding: 8px 8px;">{{ loop.index }}</td>
+                                <td style="padding: 8px 8px; font-weight: 500; font-size: 11px;">{{ d.process_type }}</td>
+                                <td style="padding: 8px 8px;">{{ d.process_name or 'None' }}</td>
+                                <td style="padding: 8px 8px;">{{ d.fabric_incharge_name or 'None' }}</td>
+                                <td style="padding: 8px 8px; white-space: nowrap;">
+                                    <button type="button" class="btn edit btn-sm" style="padding: 3px 6px; border-radius: 4px;" onclick="editDetails('{{ d.id }}', '{{ d.process_type | escape }}', '{{ d.process_id }}', '{{ d.fabric_incharge_id }}')">Edit</button>
+                                    <form action="/process_master/process_details/delete/{{ d.id }}" method="POST" style="display: inline-block; margin: 0;" onsubmit="return confirm('Delete this process details record?')">
+                                        <button type="submit" class="btn delete btn-sm" style="padding: 3px 6px; border-radius: 4px;">Delete</button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="5" style="text-align: center; color: #a0aec0; padding: 12px;">No records</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Fabric Incharge Edit controller
+    function editIncharge(id, name) {
+        document.getElementById('incharge_edit_id').value = id;
+        document.getElementById('incharge_name').value = name;
+        document.getElementById('incharge_submit_btn').innerText = 'Update Incharge';
+        document.getElementById('incharge_cancel_btn').style.display = 'inline-block';
+        document.getElementById('incharge_name').focus();
+    }
+    
+    function cancelInchargeEdit() {
+        document.getElementById('incharge_edit_id').value = '';
+        document.getElementById('incharge_name').value = '';
+        document.getElementById('incharge_submit_btn').innerText = 'Add Incharge';
+        document.getElementById('incharge_cancel_btn').style.display = 'none';
+    }
+
+    // Process Edit controller
+    function editProcess(id, name) {
+        document.getElementById('process_edit_id').value = id;
+        document.getElementById('process_name').value = name;
+        document.getElementById('process_submit_btn').innerText = 'Update Process';
+        document.getElementById('process_cancel_btn').style.display = 'inline-block';
+        document.getElementById('process_name').focus();
+    }
+    
+    function cancelProcessEdit() {
+        document.getElementById('process_edit_id').value = '';
+        document.getElementById('process_name').value = '';
+        document.getElementById('process_submit_btn').innerText = 'Add Process';
+        document.getElementById('process_cancel_btn').style.display = 'none';
+    }
+
+    // Process Details Edit controller
+    function editDetails(id, type, processId, inchargeId) {
+        document.getElementById('details_edit_id').value = id;
+        document.getElementById('details_type').value = type;
+        document.getElementById('details_process').value = processId;
+        document.getElementById('details_incharge').value = inchargeId;
+        document.getElementById('details_submit_btn').innerText = 'Update Details';
+        document.getElementById('details_cancel_btn').style.display = 'inline-block';
+        document.getElementById('details_type').focus();
+    }
+    
+    function cancelDetailsEdit() {
+        document.getElementById('details_edit_id').value = '';
+        document.getElementById('details_type').value = 'OWN PROCESS';
+        document.getElementById('details_process').value = '';
+        document.getElementById('details_incharge').value = '';
+        document.getElementById('details_submit_btn').innerText = 'Add Details';
+        document.getElementById('details_cancel_btn').style.display = 'none';
+    }
+</script>
+</body>
+</html>

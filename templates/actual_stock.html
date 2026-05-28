@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Fabric Actual Stock</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<div class="container">
+    {% include 'sidebar.html' %}
+
+    <div class="main">
+        <h1>Fabric Actual Stock</h1>
+        <p>This page shows balance calculations for fabrics using base stock, WIP, and requirements.</p>
+
+        <form method="get" class="stock-form">
+            <div class="filter-grid">
+                <div>
+                    <label>Fabric</label>
+                    <select name="fabric" multiple>
+                        {% for fabric in all_fabrics %}
+                        <option value="{{ fabric.name }}" {% if fabric.name in selected_filters.fabric %}selected{% endif %}>{{ fabric.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label>UOM</label>
+                    <select name="uom" multiple>
+                        {% for uom in all_uoms %}
+                        <option value="{{ uom }}" {% if uom in selected_filters.uom %}selected{% endif %}>{{ uom }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label>Colour</label>
+                    <select name="colour">
+                        <option value="">-- Select Colour --</option>
+                        {% for colour in all_colours %}
+                        <option value="{{ colour }}" {% if colour in selected_filters.colour %}selected{% endif %}>{{ colour }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label>DIA</label>
+                    <select name="dia">
+                        <option value="">-- Select DIA --</option>
+                        {% for dia in all_dias %}
+                        <option value="{{ dia }}" {% if dia in selected_filters.dia %}selected{% endif %}>{{ dia }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <button type="submit" class="btn edit">Apply Filters</button>
+            <a href="/actual_stock" class="btn secondary">Clear Filters</a>
+        </form>
+
+        <table class="data-table">
+            <tr>
+                <th>#</th>
+                <th>Fabric</th>
+                <th>UOM</th>
+                <th>GSM</th>
+                <th>Colour</th>
+                <th>DIA</th>
+                <th>Base Stock</th>
+                <th>WIP</th>
+                <th>Requirement</th>
+                <th>Actual Stock</th>
+            </tr>
+            {% for item in fabric_balances %}
+            <tr>
+                <td>{{ loop.index }}</td>
+                <td>{{ item.fabric_name }}</td>
+                <td>{{ item.uom }}</td>
+                <td>{{ item.gsm }}</td>
+                <td>{{ item.colour }}</td>
+                <td>{{ item.dia }}</td>
+                <td>{{ item.base_stock }}</td>
+                <td>{{ item.wip }}</td>
+                <td>{{ item.requirement }}</td>
+                <td>{{ item.actual_stock }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+</div>
+</body>
+</html>

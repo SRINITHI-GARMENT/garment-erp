@@ -1,0 +1,192 @@
+<style>
+    .advanced-filter-form {
+        max-width: 100%;
+        margin-bottom: 18px;
+    }
+    .advanced-filter-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+        gap: 14px;
+        margin-bottom: 16px;
+    }
+    .advanced-filter {
+        position: relative;
+    }
+    .advanced-filter label {
+        display: block;
+        margin-bottom: 6px;
+        font-weight: 700;
+        color: #0b3a4e;
+    }
+    .advanced-filter-search {
+        width: 100%;
+        padding: 11px 12px;
+        border: 1px solid #cbd5e0;
+        border-radius: 8px;
+        background: #f8fbff;
+    }
+    .advanced-filter-menu {
+        display: none;
+        position: absolute;
+        z-index: 50;
+        left: 0;
+        right: 0;
+        top: calc(100% + 6px);
+        max-height: 260px;
+        overflow: auto;
+        padding: 10px;
+        background: #ffffff;
+        border: 1px solid #cbd5e0;
+        border-radius: 8px;
+        box-shadow: 0 18px 35px rgba(15, 45, 70, 0.16);
+    }
+    .advanced-filter.open .advanced-filter-menu {
+        display: block;
+    }
+    .advanced-filter-option {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 7px 6px;
+        border-radius: 6px;
+        cursor: pointer;
+    }
+    .advanced-filter-option:hover {
+        background: #eef6ff;
+    }
+    .advanced-filter-option input {
+        width: 16px;
+        height: 16px;
+        margin: 0;
+        accent-color: #0d7b9d;
+    }
+    .advanced-filter-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+    }
+</style>
+
+<form method="GET" action="{{ filter_action }}" class="stock-form advanced-filter-form">
+    {% for hidden_name, hidden_value in hidden_fields.items() %}
+    <input type="hidden" name="{{ hidden_name }}" value="{{ hidden_value }}">
+    {% endfor %}
+
+    <div class="advanced-filter-grid">
+        {% for field in filter_fields %}
+        <div class="advanced-filter" data-key="{{ field.key }}">
+            <label>{{ field.label }}</label>
+            <input type="search" class="advanced-filter-search" data-key="{{ field.key }}" placeholder="Search {{ field.label }}..." autocomplete="off">
+            <div class="advanced-filter-menu" data-key="{{ field.key }}">
+                {% for value in filter_options[field.options_key|default(field.key)] %}
+                <label class="advanced-filter-option" data-value="{{ value }}">
+                    <input type="checkbox" name="{{ field.key }}" value="{{ value }}" {% if value in selected_filters[field.key] %}checked{% endif %}>
+                    <span>{{ value }}</span>
+                </label>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    <div class="advanced-filter-actions">
+        <button type="submit" class="btn edit">Apply Filters</button>
+        <a href="{{ clear_url }}" class="btn secondary">Clear Filters</a>
+        {% if export_url %}
+        <a href="{{ export_url }}" class="btn secondary">Export to Excel</a>
+        {% endif %}
+    </div>
+</form>
+
+<script>
+    (function() {
+        const filters = Array.from(document.querySelectorAll('.advanced-filter'));
+
+        function selectedValues(key) {
+            return Array.from(document.querySelectorAll(`.advanced-filter[data-key="${key}"] input[type="checkbox"]:checked`)).map(input => input.value);
+        }
+
+        function refreshDisplay(filter) {
+            const key = filter.dataset.key;
+            const search = filter.querySelector('.advanced-filter-search');
+            const values = selectedValues(key);
+            search.value = values.length ? values.join(', ') : '';
+        }
+
+        function refreshDependentOptions() {
+            const colourValues = selectedValues('colour');
+            const diaValues = selectedValues('dia');
+            const colourOptions = Array.from(document.querySelectorAll('.advanced-filter[data-key="colour"] .advanced-filter-option'));
+            const diaOptions = Array.from(document.querySelectorAll('.advanced-filter[data-key="dia"] .advanced-filter-option'));
+
+            if (!colourOptions.length || !diaOptions.length) return;
+
+            const pairs = Array.from(document.querySelectorAll('tbody tr')).map(row => {
+                const cells = row.querySelectorAll('td');
+                return {
+                    colour: (row.dataset.colour || (cells[5] ? cells[5].textContent : '')).trim(),
+                    dia: (row.dataset.dia || (cells[6] ? cells[6].textContent : '')).trim()
+                };
+            });
+
+            const allowedColours = new Set();
+            const allowedDias = new Set();
+            pairs.forEach(pair => {
+                const rowColours = pair.colour.split(',').map(v => v.trim()).filter(Boolean);
+                const rowDias = pair.dia.split(',').map(v => v.trim()).filter(Boolean);
+                if (!diaValues.length || rowDias.some(dia => diaValues.includes(dia))) {
+                    rowColours.forEach(colour => allowedColours.add(colour));
+                }
+                if (!colourValues.length || rowColours.some(colour => colourValues.includes(colour))) {
+                    rowDias.forEach(dia => allowedDias.add(dia));
+                }
+            });
+
+            colourOptions.forEach(label => {
+                const checkbox = label.querySelector('input');
+                const disabled = diaValues.length > 0 && allowedColours.size > 0 && !allowedColours.has(checkbox.value);
+                checkbox.disabled = disabled;
+                label.style.opacity = disabled ? '0.45' : '1';
+            });
+            diaOptions.forEach(label => {
+                const checkbox = label.querySelector('input');
+                const disabled = colourValues.length > 0 && allowedDias.size > 0 && !allowedDias.has(checkbox.value);
+                checkbox.disabled = disabled;
+                label.style.opacity = disabled ? '0.45' : '1';
+            });
+        }
+
+        filters.forEach(filter => {
+            const search = filter.querySelector('.advanced-filter-search');
+            search.addEventListener('focus', () => {
+                filters.forEach(other => {
+                    if (other !== filter) other.classList.remove('open');
+                });
+                filter.classList.add('open');
+                search.value = '';
+            });
+            search.addEventListener('input', () => {
+                const query = search.value.toLowerCase();
+                filter.querySelectorAll('.advanced-filter-option').forEach(option => {
+                    option.style.display = option.textContent.toLowerCase().includes(query) ? 'flex' : 'none';
+                });
+            });
+            filter.addEventListener('change', () => {
+                refreshDisplay(filter);
+                refreshDependentOptions();
+            });
+            refreshDisplay(filter);
+        });
+
+        document.addEventListener('click', event => {
+            if (!event.target.closest('.advanced-filter')) {
+                filters.forEach(filter => {
+                    filter.classList.remove('open');
+                    refreshDisplay(filter);
+                });
+            }
+        });
+
+        refreshDependentOptions();
+    })();
+</script>

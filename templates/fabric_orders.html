@@ -1,0 +1,1089 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{ title }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        /* Tabs Bar */
+        .tabs {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            background: #0b3a4e;
+            border: 2px solid #05283a;
+            border-radius: 8px;
+            box-shadow: 0 12px 26px rgba(11, 58, 78, 0.16);
+            margin-bottom: 24px;
+            padding: 10px;
+            width: fit-content;
+            max-width: 100%;
+            flex-wrap: wrap;
+        }
+        .tab-btn {
+            background: #c85114;
+            border: 2px solid #062c3f;
+            padding: 12px 28px;
+            font-size: 14px;
+            font-weight: 600;
+            color: #ffffff;
+            cursor: pointer;
+            border-radius: 2px;
+            transition: all 0.2s ease;
+            text-transform: uppercase;
+        }
+        .tab-btn:hover {
+            background-color: #e16322;
+            text-decoration: none;
+        }
+        .tab-btn.active {
+            color: #ffffff;
+            background-color: #0d7b9d;
+            box-shadow: inset 0 -3px 0 rgba(255,255,255,0.45);
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+
+        /* Badges for status */
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 9999px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .badge.pending {
+            background-color: #fef3c7;
+            color: #d97706;
+        }
+        .badge.processing, .badge.in-progress {
+            background-color: #e0f2fe;
+            color: #0284c7;
+        }
+        .badge.completed {
+            background-color: #dcfce7;
+            color: #15803d;
+        }
+        .badge.cancelled {
+            background-color: #fee2e2;
+            color: #b91c1c;
+        }
+
+        /* Success banner */
+        .success-alert {
+            margin: 16px 0;
+            padding: 14px 18px;
+            background: #e6fffa;
+            border-left: 4px solid #319795;
+            color: #234e52;
+            border-radius: 8px;
+        }
+
+        /* Manual Order Table Styles */
+        .manual-table th, .manual-table td {
+            padding: 10px;
+        }
+        .manual-table select, .manual-table input {
+            padding: 8px;
+            border: 1px solid #cbd5e0;
+            border-radius: 6px;
+            width: 100%;
+        }
+
+        .orders-toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 16px;
+            flex-wrap: wrap;
+            margin-bottom: 16px;
+        }
+        .orders-toolbar h2 {
+            margin: 0;
+            color: #0b3a4e;
+        }
+        .report-filter-form {
+            max-width: 100%;
+            margin-bottom: 18px;
+        }
+        .report-filter-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 14px;
+            margin-bottom: 16px;
+        }
+        .report-filter-grid select {
+            min-height: 96px;
+        }
+        .helper-text {
+            color: #64748b;
+            font-size: 12px;
+            margin: -6px 0 14px;
+        }
+        .actions-row {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        /* Dialogs / Modals */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(4px);
+        }
+        .modal-content {
+            background-color: #ffffff;
+            padding: 24px;
+            border-radius: 14px;
+            width: 90%;
+            max-width: 600px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.25);
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 18px;
+            border-bottom: 1px solid #e2e8f0;
+            padding-bottom: 10px;
+        }
+        .modal-header h2 {
+            margin: 0;
+            color: #0b3a4e;
+            font-size: 20px;
+        }
+        .close-modal {
+            font-size: 24px;
+            cursor: pointer;
+            color: #a0aec0;
+            border: none;
+            background: none;
+        }
+        .close-modal:hover {
+            color: #4a5568;
+        }
+        .modal-body label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 600;
+            font-size: 14px;
+            color: #4a5568;
+        }
+        .modal-body input, .modal-body select {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 16px;
+            border: 1px solid #cbd5e0;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+
+        
+    </style>
+</head>
+<body>
+<div class="container">
+    {% include 'sidebar.html' %}
+
+    <div class="main">
+        <h1>Fabric Orders</h1>
+        
+        <!-- Alerts -->
+        {% if error %}
+            <div class="alert">{{ error }}</div>
+        {% endif %}
+        {% if success %}
+            <div class="success-alert">{{ success }}</div>
+        {% endif %}
+
+        <!-- Tab Buttons Bar -->
+        <div class="tabs">
+            <button class="tab-btn {% if tab == 'custom' %}active{% endif %}" onclick="switchTab('custom')">Custom Order</button>
+            <button class="tab-btn {% if tab == 'manual' %}active{% endif %}" onclick="switchTab('manual')">Manual Order</button>
+            <button class="tab-btn {% if tab == 'report' %}active{% endif %}" onclick="switchTab('report')">Report</button>
+        </div>
+
+        <!-- TAB 1: CUSTOM ORDER -->
+        <div id="custom-tab" class="tab-content {% if tab == 'custom' %}active{% endif %}">
+            <!-- Filter Options Form -->
+            <form method="GET" action="/fabric_orders" class="stock-form" style="margin-bottom: 20px;">
+                <input type="hidden" name="tab" value="custom">
+                <div class="filter-grid">
+                    <div>
+                        <label>Fabric</label>
+                        <input type="search" name="fabric" value="{{ selected_filters.fabric }}" placeholder="Search fabrics...">
+                    </div>
+                    <div>
+                        <label>UOM</label>
+                        <input type="search" name="uom" value="{{ selected_filters.uom }}" placeholder="Search UOM...">
+                    </div>
+                    <div>
+                        <label>GSM</label>
+                        <input type="search" name="gsm" value="{{ selected_filters.gsm }}" placeholder="Search GSM...">
+                    </div>
+                    <div>
+                        <label>Colour</label>
+                        <input type="search" name="colour" value="{{ selected_filters.colour }}" placeholder="Search colour...">
+                    </div>
+                    <div>
+                        <label>DIA</label>
+                        <input type="search" name="dia" value="{{ selected_filters.dia }}" placeholder="Search DIA...">
+                    </div>
+                    <div>
+                        <label>Result</label>
+                        <input type="search" name="result" value="{{ selected_filters.result }}" placeholder="Search result...">
+                    </div>
+                </div>
+                <button type="submit" class="btn edit">Apply Filters</button>
+                <a href="/fabric_orders?tab=custom" class="btn secondary">Clear Filters</a>
+            </form>
+
+            <!-- Frozen cart indicators -->
+            {% if frozen_orders %}
+                <div class="summary" style="margin-bottom: 18px; display: flex; justify-content: space-between; align-items: center;">
+                    <span>🛒 Currently Frozen Cart: <strong>{{ frozen_orders|length }}</strong> unique items</span>
+                    <button type="button" class="btn edit btn-sm" onclick="openGeneratePOModal()">Generate PO for Frozen Items</button>
+                </div>
+            {% endif %}
+
+            
+
+            <!-- Table Form for Freezing Selected -->
+            <form method="POST" action="/fabric_orders/freeze" id="customFreezeForm">
+                <!-- Keep filters active during post -->
+                <input type="hidden" name="fabric" value="{{ selected_filters.fabric }}">
+                <input type="hidden" name="uom" value="{{ selected_filters.uom }}">
+                <input type="hidden" name="gsm" value="{{ selected_filters.gsm }}">
+                <input type="hidden" name="colour" value="{{ selected_filters.colour }}">
+                <input type="hidden" name="dia" value="{{ selected_filters.dia }}">
+                <input type="hidden" name="result" value="{{ selected_filters.result }}">
+
+                <div style="margin-bottom: 12px; display: flex; gap: 8px;">
+                    <button type="submit" class="btn secondary">Freeze Selected</button>
+                </div>
+
+                <div class="table-responsive custom-table-wrapper">
+                    <table class="data-table custom-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 40px;"><input id="customSelectAll" type="checkbox" style="width:16px; height:16px;"></th>
+                                <th>#</th>
+                                <th>Fabric</th>
+                                <th>UOM</th>
+                                <th>GSM</th>
+                                <th>Colour</th>
+                                <th>DIA</th>
+                                <th>Base Stock</th>
+                                <th>Actual Stock</th>
+                                <th>WIP</th>
+                                <th>Requirement</th>
+                                <th>Result</th>
+                                <th>Min O.Qty</th>
+                                <th>Frozen Qty</th>
+                                <th>Order Suggestion</th>
+                                <th>Order Qty</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in rows %}
+                            <tr class="custom-row" data-requirement="{{ row.requirement_detail }}" data-min-qty="{{ row.min_order_qty }}" data-frozen-qty="{{ row.frozen_qty }}">
+                                <td><input class="custom-row-checkbox" type="checkbox" name="selected_rows" value="{{ row.index }}" style="width:16px; height:16px;"></td>
+                                <td>{{ loop.index }}</td>
+                                <td>{{ row.fabric_name }}</td>
+                                <td>{{ row.uom }}</td>
+                                <td>{{ row.gsm }}</td>
+                                <td>{{ row.colour | join(', ') }}</td>
+                                <td>{{ row.dia | join(', ') }}</td>
+                                <td>{{ row.base_stock }}</td>
+                                <td>{{ row.actual_stock }}</td>
+                                <td>{{ row.wip }}</td>
+                                <td>{{ row.requirement_detail }}</td>
+                                <td>
+                                    <span class="badge {{ row.result_type | lower }}">{{ row.result_type }}</span>
+                                </td>
+                                <td>{{ row.min_order_qty }}</td>
+                                <td>{{ row.frozen_qty }}</td>
+                                <td>
+                                    {% if row.result_type == 'REQUIRED' %}
+                                        {{
+                                            (
+                                                (row.actual_stock or 0) +
+                                                (row.wip or 0) +
+                                                (row.frozen_qty or 0)
+                                            )
+                                            -
+                                            (
+                                                (row.base_stock or 0) + (row.min_order_qty or 0)
+                                            )
+                                            
+                                        }}
+                                    {% else %}
+                                        0
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <!-- Editable input box -->
+                                    <input type="number" step="0.01" min="0" name="order_qty_{{ row.index }}" value="{{ row.order_qty }}" class="order-qty-input" style="width: 80px; padding: 4px 6px; border: 1px solid #cbd5e0; border-radius: 4px;">
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="15" style="text-align: center; padding: 20px; color: #a0aec0;">No records matching the filters found.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </form>
+            <h3>Frozen Quantity</h3>
+            <div class="table-wrapper">
+                <table class="data-table" style="font-size: 13px;">
+                    <thead>
+                        <tr>
+                            <th>Fabric</th>
+                            <th>UOM</th>
+                            <th>GSM</th>
+                            <th>Colour</th>
+                            <th>DIA</th>
+                            <th>Frozen Qty</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in frozen_orders %}
+                        <tr>
+                            <td>{{ item.fabric_name }}</td>
+                            <td>{{ item.uom }}</td>
+                            <td>{{ item.gsm }}</td>
+                            <td>{{ item.colour | join(', ') }}</td>
+                            <td>{{ item.dia | join(', ') }}</td>
+                            <td>{{ item.order_qty }}</td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="6" style="text-align:center; color:#718096;">No frozen quantities.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- TAB 2: MANUAL ORDER -->
+        <div id="manual-tab" class="tab-content {% if tab == 'manual' %}active{% endif %}">
+            <form id="manualOrderForm" method="POST" action="/fabric_orders/manual/save" class="stock-form" style="max-width: 100%;">
+                <input type="hidden" name="manual_action" id="manual_action_field" value="generate_new">
+                <input type="hidden" name="po_number" id="manual_po_number_field" value="">
+                <input type="hidden" name="process_type" id="manual_process_type_field" value="">
+                <input type="hidden" name="process" id="manual_process_field" value="">
+                <input type="hidden" name="fabric_incharge" id="manual_fabric_incharge_field" value="">
+                <input type="hidden" name="old_po_id" id="manual_old_po_id_field" value="">
+
+                <h2>Manual Order Items Form</h2>
+                <div class="table-wrapper">
+                    <table class="data-table manual-table" id="manualOrderTable" style="margin-top: 10px;">
+                        <thead>
+                            <tr>
+                                <th>Fabric (UOM/GSM)</th>
+                                <th>Colour</th>
+                                <th>DIA</th>
+                                <th>Order Qty</th>
+                                <th style="width: 60px;">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Javascript adds rows here -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <div style="margin-top: 16px; display: flex; justify-content: space-between;">
+                    <button type="button" class="btn secondary" onclick="addManualRow()">➕ ADD ITEM</button>
+                    <div style="display: flex; gap: 10px;">
+                        <button type="button" class="btn edit" onclick="openManualNewModal()">Generate as New PO</button>
+                        <button type="button" class="btn edit" style="background-color: #319795;" onclick="openManualOldModal()">Add to Existing PO</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <!-- TAB 3: REPORT -->
+        <div id="report-tab" class="tab-content {% if tab == 'report' %}active{% endif %}">
+            <div class="orders-toolbar">
+                <div>
+                    <h2>Generated Purchase Orders</h2>
+                    <div class="helper-text">Filter with one or many values, then export the matching rows to Excel.</div>
+                </div>
+                <a class="btn edit" href="/fabric_orders/report/export?{{ request.query_string.decode() }}">Export Excel</a>
+            </div>
+
+            {% set filter_fields = [
+                {'key': 'report_po_number', 'label': 'PO No', 'options_key': 'po_number'},
+                {'key': 'report_fabric', 'label': 'Fabric', 'options_key': 'fabric'},
+                {'key': 'report_colour', 'label': 'Colour', 'options_key': 'colour'},
+                {'key': 'report_dia', 'label': 'DIA', 'options_key': 'dia'},
+                {'key': 'report_process_type', 'label': 'Process Type', 'options_key': 'process_type'},
+                {'key': 'report_process', 'label': 'Process', 'options_key': 'process'},
+                {'key': 'report_fabric_incharge', 'label': 'Fabric Incharge', 'options_key': 'fabric_incharge'},
+                {'key': 'report_status', 'label': 'Status', 'options_key': 'status'}
+            ] %}
+            {% set filter_action = url_for('fabric_orders') %}
+            {% set clear_url = url_for('fabric_orders', tab='report') %}
+            {% set export_url = url_for('fabric_orders_report_export', **request.args) %}
+            {% set hidden_fields = {'tab': 'report'} %}
+            {% set filter_options = report_filter_options %}
+            {% set selected_filters = selected_report_form_filters %}
+            {% include '_advanced_filters.html' %}
+
+
+
+            <h3 style="margin-top: 24px;">Orders List</h3>
+
+            
+
+            <div class="table-wrapper">
+                <table class="data-table" style="font-size: 13px;">
+                    <thead>
+                        <tr>
+                            <th>PO No</th>
+                            <th>Fabric (UOM/GSM)</th>
+                            <th>Colour</th>
+                            <th>DIA</th>
+                            <th>Order Qty</th>
+                            <th>Process Type</th>
+                            <th>Process</th>
+                            <th>Incharge</th>
+                            <th>Status</th>
+                            <th style="width: 200px;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for o in orders %}
+                            {% for item in o.order_items %}
+                            <tr data-colour="{{ item.colour | join(', ') }}" data-dia="{{ item.dia | join(', ') }}">
+                                <td style="font-weight: bold; color: #0b3a4e;">{{ o.po_number }}</td>
+                                <td>{{ item.fabric_name }} ({{ item.uom or '-' }} / {{ item.gsm or '-' }})</td>
+                                <td>{{ item.colour | join(', ') }}</td>
+                                <td>{{ item.dia | join(', ') }}</td>
+                                <td style="font-weight: 500;">{{ item.order_qty }}</td>
+                                <td>{{ item.process_type }}</td>
+                                <td>{{ item.process or '-' }}</td>
+                                <td>{{ item.fabric_incharge or '-' }}</td>
+                                <td style="text-align: center;">
+                                    <span class="badge {{ o.status | lower | replace(' ', '-') }}">{{ o.status }}</span>
+                                </td>
+                                <td style="text-align: center; white-space: nowrap;">
+                                    <button type="button" class="btn edit btn-sm" onclick="openUpdateStatusModal('{{ o.id }}', '{{ o.status }}')" style="padding: 4px 8px; font-size: 11px;">Status</button>
+                                    <a class="btn edit btn-sm" href="{{ url_for('fabric_orders_process_update', order_id=o.id, item_index=item.item_index) }}" style="padding: 4px 8px; font-size: 11px; background-color:#6b46c1;">Process Update</a>
+                                    <button type="button" class="btn edit btn-sm" onclick='openEditPOModal({{ o | tojson | safe }})' style="padding: 4px 8px; font-size: 11px; background-color:#319795;">Edit</button>
+                                    <button type="button" class="btn secondary btn-sm" onclick='openViewPOModal({{ o | tojson | safe }})' style="padding: 4px 8px; font-size: 11px;">View</button>
+                                    <form action="/fabric_orders/delete/{{ o.id }}" method="POST" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete this entire Purchase Order?')">
+                                        <button type="submit" class="btn delete btn-sm" style="padding: 4px 8px; font-size: 11px;">Delete</button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                        <tr>
+                            <td colspan="10" style="text-align: center; padding: 30px; color: #a0aec0;">No generated orders found.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ================= MODALS ================= -->
+
+<!-- 1. Custom PO Modal -->
+<div id="customPOModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Generate PO for Frozen Items</h2>
+            <button type="button" class="close-modal" onclick="closeModal('customPOModal')">&times;</button>
+        </div>
+        <form method="POST" action="/fabric_orders/generate">
+            <div class="modal-body">
+                <label for="c_po_number">PO Number</label>
+                <input type="text" name="po_number" id="c_po_number" placeholder="e.g. PO-2026-101" required autocomplete="off">
+
+                <label for="c_process_type">Process Type</label>
+                <select name="process_type" id="c_process_type" onchange="handlePOModalTypeChange('c')" required>
+                    <option value="OWN PROCESS">OWN PROCESS</option>
+                    <option value="FABRIC PURCHASE">FABRIC PURCHASE</option>
+                </select>
+
+                <label for="c_process">Process</label>
+                <select name="process" id="c_process" required>
+                    <option value="">-- Select Process --</option>
+                </select>
+
+                <label for="c_fabric_incharge">Fabric Incharge</label>
+                <select name="fabric_incharge" id="c_fabric_incharge" required>
+                    <option value="">-- Select Incharge --</option>
+                </select>
+            </div>
+            <div style="display: flex; gap: 8px; justify-content: flex-end; padding-top: 10px;">
+                <button type="submit" class="btn edit">Generate Order Sheet</button>
+                <button type="button" class="btn secondary" onclick="closeModal('customPOModal')">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 2. Manual New PO Modal -->
+<div id="manualNewModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Generate New PO from Manual Items</h2>
+            <button type="button" class="close-modal" onclick="closeModal('manualNewModal')">&times;</button>
+        </div>
+        <div class="modal-body">
+            <label for="m_po_number">PO Number</label>
+            <input type="text" id="m_po_number" placeholder="e.g. PO-2026-102" required autocomplete="off">
+
+            <label for="m_process_type">Process Type</label>
+            <select id="m_process_type" onchange="handlePOModalTypeChange('m')" required>
+                <option value="OWN PROCESS">OWN PROCESS</option>
+                <option value="FABRIC PURCHASE">FABRIC PURCHASE</option>
+            </select>
+
+            <label for="m_process">Process</label>
+            <select id="m_process" required>
+                <option value="">-- Select Process --</option>
+            </select>
+
+            <label for="m_fabric_incharge">Fabric Incharge</label>
+            <select id="m_fabric_incharge" required>
+                <option value="">-- Select Incharge --</option>
+            </select>
+        </div>
+        <div style="display: flex; gap: 8px; justify-content: flex-end; padding-top: 10px;">
+            <button type="button" class="btn edit" onclick="submitManualNew()">Generate PO</button>
+            <button type="button" class="btn secondary" onclick="closeModal('manualNewModal')">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<!-- 3. Manual Add to Old PO Modal -->
+<div id="manualOldModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Add Items to Existing PO</h2>
+            <button type="button" class="close-modal" onclick="closeModal('manualOldModal')">&times;</button>
+        </div>
+        <div class="modal-body">
+            <label for="m_old_po_id">Select Existing Purchase Order</label>
+            <select id="m_old_po_id" required>
+                <option value="">-- Select PO --</option>
+                {% for o in orders %}
+                <option value="{{ o.id }}">{{ o.po_number }} ({{ o.process_type }} - {{ o.status }})</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div style="display: flex; gap: 8px; justify-content: flex-end; padding-top: 10px;">
+            <button type="button" class="btn edit" onclick="submitManualOld()">Append Items</button>
+            <button type="button" class="btn secondary" onclick="closeModal('manualOldModal')">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<!-- 4. Update Status Modal -->
+<div id="statusModal" class="modal">
+    <div class="modal-content" style="max-width: 400px;">
+        <div class="modal-header">
+            <h2>Update PO Status</h2>
+            <button type="button" class="close-modal" onclick="closeModal('statusModal')">&times;</button>
+        </div>
+        <form method="POST" action="/fabric_orders/update_status">
+            <input type="hidden" name="id" id="status_po_id" value="">
+            <div class="modal-body">
+                <label for="status_select">Select Status</label>
+                <select name="status" id="status_select" required>
+                    <option value="Pending">Pending</option>
+                    <option value="In Progress">In Progress</option>
+                    <option value="Completed">Completed</option>
+                    <option value="Cancelled">Cancelled</option>
+                </select>
+            </div>
+            <div style="display: flex; gap: 8px; justify-content: flex-end; padding-top: 10px;">
+                <button type="submit" class="btn edit">Update</button>
+                <button type="button" class="btn secondary" onclick="closeModal('statusModal')">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 5. View PO Modal -->
+<div id="viewPOModal" class="modal" style="background-color: rgba(0,0,0,0.6);">
+    <div class="modal-content" style="max-width: 700px; padding: 36px;">
+        <div class="modal-header" style="border-bottom: 2px solid #cbd5e0; margin-bottom: 20px;">
+            <h2>Purchase Order Details</h2>
+            <button type="button" class="close-modal" onclick="closeModal('viewPOModal')">&times;</button>
+        </div>
+        <div id="viewPOPrintArea" class="modal-body" style="font-family: Inter, Arial, sans-serif; color: #1a202c;">
+            <!-- Render invoice dynamic template via JS -->
+        </div>
+        <div style="display: flex; gap: 8px; justify-content: flex-end; padding-top: 20px; border-top: 1px solid #cbd5e0; margin-top: 20px;">
+            <button type="button" class="btn edit" onclick="printPOArea()">Print PO</button>
+            <button type="button" class="btn secondary" onclick="closeModal('viewPOModal')">Close</button>
+        </div>
+    </div>
+</div>
+
+<!-- 6. Edit PO Modal -->
+<div id="editPOModal" class="modal">
+    <div class="modal-content" style="max-width: 750px;">
+        <div class="modal-header">
+            <h2>Edit Purchase Order Details</h2>
+            <button type="button" class="close-modal" onclick="closeModal('editPOModal')">&times;</button>
+        </div>
+        <form method="POST" action="/fabric_orders/edit">
+            <input type="hidden" name="id" id="edit_po_id">
+            <div class="modal-body">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                    <div>
+                        <label for="e_po_number">PO Number</label>
+                        <input type="text" name="po_number" id="e_po_number" required autocomplete="off">
+                    </div>
+                    <div>
+                        <label for="e_status">Status</label>
+                        <select name="status" id="e_status" required>
+                            <option value="Pending">Pending</option>
+                            <option value="In Progress">In Progress</option>
+                            <option value="Completed">Completed</option>
+                            <option value="Cancelled">Cancelled</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px;">
+                    <div>
+                        <label for="e_process_type">Process Type</label>
+                        <select name="process_type" id="e_process_type" onchange="handlePOModalTypeChange('e')" required>
+                            <option value="OWN PROCESS">OWN PROCESS</option>
+                            <option value="FABRIC PURCHASE">FABRIC PURCHASE</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="e_process">Process</label>
+                        <select name="process" id="e_process" required>
+                            <option value="">-- Select Process --</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="e_fabric_incharge">Fabric Incharge</label>
+                        <select name="fabric_incharge" id="e_fabric_incharge" required>
+                            <option value="">-- Select Incharge --</option>
+                        </select>
+                    </div>
+                </div>
+
+                <h3 style="margin-top: 18px; margin-bottom: 10px; color: #0b3a4e;">Order Items</h3>
+                <div class="table-wrapper">
+                    <table class="data-table" style="font-size: 13px;" id="editPOItemsTable">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Fabric</th>
+                                <th>Colour</th>
+                                <th>DIA</th>
+                                <th>Order Qty</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div style="display: flex; gap: 8px; justify-content: flex-end; padding-top: 15px; border-top: 1px solid #e2e8f0; margin-top: 15px;">
+                <button type="submit" class="btn edit">Save Changes</button>
+                <button type="button" class="btn secondary" onclick="closeModal('editPOModal')">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ================= JAVASCRIPT ================= -->
+<script>
+    const fabricsList = {{ fabrics | tojson }};
+    const processDetailsMapping = {{ process_details | tojson }};
+    const allProcesses = {{ processes | tojson }};
+    const allIncharges = {{ incharges | tojson }};
+
+    // Tab Navigation
+    function switchTab(tabId) {
+        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        
+        // Find button that has onclick with switchTab('tabId')
+        const btns = Array.from(document.querySelectorAll('.tab-btn'));
+        const targetBtn = btns.find(b => b.getAttribute('onclick').includes(tabId));
+        if (targetBtn) targetBtn.classList.add('active');
+        
+        const content = document.getElementById(tabId + '-tab');
+        if (content) content.classList.add('active');
+        
+        // Update URL query string silently
+        const url = new URL(window.location);
+        url.searchParams.set('tab', tabId);
+        window.history.pushState({}, '', url);
+    }
+
+    // Modal Control
+    function openModal(id) {
+        document.getElementById(id).style.display = 'flex';
+    }
+    
+    function closeModal(id) {
+        document.getElementById(id).style.display = 'none';
+    }
+
+    window.onclick = function(e) {
+        if (e.target.classList.contains('modal')) {
+            e.target.style.display = 'none';
+        }
+    }
+
+    // Modal Process Type Filter Logic
+    function handlePOModalTypeChange(prefix, selectedProcess = null, selectedIncharge = null) {
+        const typeSelect = document.getElementById(prefix + '_process_type');
+        const processSelect = document.getElementById(prefix + '_process');
+        const inchargeSelect = document.getElementById(prefix + '_fabric_incharge');
+        
+        if (!typeSelect || !processSelect || !inchargeSelect) return;
+        
+        const selectedType = typeSelect.value;
+        processSelect.innerHTML = '<option value="">-- Select Process --</option>';
+        inchargeSelect.innerHTML = '<option value="">-- Select Incharge --</option>';
+        
+        const filteredDetails = processDetailsMapping.filter(pd => pd.process_type === selectedType);
+        
+        if (filteredDetails.length > 0) {
+            const addedProcesses = new Set();
+            const addedIncharges = new Set();
+            filteredDetails.forEach(pd => {
+                if (pd.process_name && !addedProcesses.has(pd.process_name)) {
+                    const opt = document.createElement('option');
+                    opt.value = pd.process_name;
+                    opt.textContent = pd.process_name;
+                    if (selectedProcess && pd.process_name === selectedProcess) opt.selected = true;
+                    processSelect.appendChild(opt);
+                    addedProcesses.add(pd.process_name);
+                }
+                if (pd.fabric_incharge_name && !addedIncharges.has(pd.fabric_incharge_name)) {
+                    const opt = document.createElement('option');
+                    opt.value = pd.fabric_incharge_name;
+                    opt.textContent = pd.fabric_incharge_name;
+                    if (selectedIncharge && pd.fabric_incharge_name === selectedIncharge) opt.selected = true;
+                    inchargeSelect.appendChild(opt);
+                    addedIncharges.add(pd.fabric_incharge_name);
+                }
+            });
+        } else {
+            allProcesses.forEach(p => {
+                const opt = document.createElement('option');
+                opt.value = p.name;
+                opt.textContent = p.name;
+                if (selectedProcess && p.name === selectedProcess) opt.selected = true;
+                processSelect.appendChild(opt);
+            });
+            allIncharges.forEach(fi => {
+                const opt = document.createElement('option');
+                opt.value = fi.name;
+                opt.textContent = fi.name;
+                if (selectedIncharge && fi.name === selectedIncharge) opt.selected = true;
+                inchargeSelect.appendChild(opt);
+            });
+        }
+    }
+
+    // Custom Order: select all logic
+    document.addEventListener('DOMContentLoaded', () => {
+        const selectAllCb = document.getElementById('customSelectAll');
+        if (selectAllCb) {
+            selectAllCb.addEventListener('change', function() {
+                document.querySelectorAll('.custom-row-checkbox').forEach(cb => {
+                    cb.checked = this.checked;
+                });
+            });
+        }
+        
+        // Load initial rows for Manual Order Form
+        addManualRow();
+    });
+
+    function openGeneratePOModal() {
+        openModal('customPOModal');
+        handlePOModalTypeChange('c');
+    }
+
+    // MANUAL ORDER FORM SYSTEM
+    let manualRowCounter = 0;
+    
+    function addManualRow() {
+        const tbody = document.querySelector('#manualOrderTable tbody');
+        const row = document.createElement('tr');
+        row.id = `manual-row-${manualRowCounter}`;
+        
+        // Fabric dropdown options
+        let fabricOptionsHtml = '<option value="">-- Select Fabric --</option>';
+        fabricsList.forEach(f => {
+            fabricOptionsHtml += `<option value="${f.id}">${f.name} (${f.uom} / ${f.gsm})</option>`;
+        });
+        
+        row.innerHTML = `
+            <td>
+                <select name="fabric_id[]" onchange="handleManualFabricChange(this, ${manualRowCounter})" required>
+                    ${fabricOptionsHtml}
+                </select>
+            </td>
+            <td>
+                <select name="colour[]" id="manual-colour-${manualRowCounter}" required>
+                    <option value="">-- Select Colour --</option>
+                </select>
+            </td>
+            <td>
+                <select name="dia[]" id="manual-dia-${manualRowCounter}" required>
+                    <option value="">-- Select DIA --</option>
+                </select>
+            </td>
+            <td>
+                <input type="number" step="0.01" min="0.01" name="quantity[]" placeholder="Enter Qty" required>
+            </td>
+            <td>
+                <button type="button" class="btn delete" style="padding: 6px 10px;" onclick="removeManualRow(${manualRowCounter})">❌</button>
+            </td>
+        `;
+        
+        tbody.appendChild(row);
+        manualRowCounter++;
+    }
+
+    function removeManualRow(index) {
+        const row = document.getElementById(`manual-row-${index}`);
+        const tbody = document.querySelector('#manualOrderTable tbody');
+        if (tbody.children.length > 1) {
+            row.remove();
+        } else {
+            alert('At least one order item is required.');
+        }
+    }
+
+    function handleManualFabricChange(selectElement, index) {
+        const fabricId = selectElement.value;
+        const colSelect = document.getElementById(`manual-colour-${index}`);
+        const diaSelect = document.getElementById(`manual-dia-${index}`);
+        
+        colSelect.innerHTML = '<option value="">-- Select Colour --</option>';
+        diaSelect.innerHTML = '<option value="">-- Select DIA --</option>';
+        
+        const fabric = fabricsList.find(f => String(f.id) === fabricId);
+        if (fabric) {
+            fabric.colour.forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c;
+                opt.textContent = c;
+                colSelect.appendChild(opt);
+            });
+            fabric.dia.forEach(d => {
+                const opt = document.createElement('option');
+                opt.value = d;
+                opt.textContent = d;
+                diaSelect.appendChild(opt);
+            });
+        }
+    }
+
+    // Submit Manual Forms
+    function openManualNewModal() {
+        // Validate form inputs first
+        const form = document.getElementById('manualOrderForm');
+        if (!form.checkValidity()) {
+            form.reportValidity();
+            return;
+        }
+        openModal('manualNewModal');
+        handlePOModalTypeChange('m');
+    }
+
+    function submitManualNew() {
+        const po = document.getElementById('m_po_number').value.trim();
+        const type = document.getElementById('m_process_type').value;
+        const proc = document.getElementById('m_process').value;
+        const inch = document.getElementById('m_fabric_incharge').value;
+        
+        if (!po || !type) {
+            alert('PO Number and Process Type are required.');
+            return;
+        }
+        
+        document.getElementById('manual_action_field').value = 'generate_new';
+        document.getElementById('manual_po_number_field').value = po;
+        document.getElementById('manual_process_type_field').value = type;
+        document.getElementById('manual_process_field').value = proc;
+        document.getElementById('manual_fabric_incharge_field').value = inch;
+        
+        closeModal('manualNewModal');
+        document.getElementById('manualOrderForm').submit();
+    }
+
+    function openManualOldModal() {
+        const form = document.getElementById('manualOrderForm');
+        if (!form.checkValidity()) {
+            form.reportValidity();
+            return;
+        }
+        openModal('manualOldModal');
+    }
+
+    function submitManualOld() {
+        const oldPoId = document.getElementById('m_old_po_id').value;
+        if (!oldPoId) {
+            alert('Please select a Purchase Order.');
+            return;
+        }
+        
+        document.getElementById('manual_action_field').value = 'add_to_old';
+        document.getElementById('manual_old_po_id_field').value = oldPoId;
+        
+        closeModal('manualOldModal');
+        document.getElementById('manualOrderForm').submit();
+    }
+
+    // Status Modal Action
+    function openUpdateStatusModal(id, currentStatus) {
+        document.getElementById('status_po_id').value = id;
+        document.getElementById('status_select').value = currentStatus;
+        openModal('statusModal');
+    }
+
+    // View PO Printable Template Builder
+    function openViewPOModal(po) {
+        const container = document.getElementById('viewPOPrintArea');
+        let itemsRows = '';
+        po.order_items.forEach((item, index) => {
+            itemsRows += `
+                <tr style="border-bottom: 1px solid #edf2f7;">
+                    <td style="padding: 10px 0; font-size: 14px;">${index + 1}</td>
+                    <td style="padding: 10px 0; font-size: 14px; font-weight: 500;">${item.fabric_name} (${item.uom || '-'} / ${item.gsm || '-'})</td>
+                    <td style="padding: 10px 0; font-size: 14px;">${item.colour.join(', ')}</td>
+                    <td style="padding: 10px 0; font-size: 14px;">${item.dia.join(', ')}</td>
+                    <td style="padding: 10px 0; font-size: 14px; font-weight: bold; text-align: right;">${item.order_qty}</td>
+                </tr>
+            `;
+        });
+        
+        container.innerHTML = `
+            <div style="display: flex; justify-content: space-between; margin-bottom: 24px;">
+                <div>
+                    <h1 style="margin: 0 0 4px; font-size: 24px; color: #0b3a4e;">SRINITHI GARMENT</h1>
+                    <p style="margin: 0; font-size: 12px; color: #718096; text-transform: uppercase; letter-spacing: 1px;">Fabric Purchase Order</p>
+                </div>
+                <div style="text-align: right;">
+                    <h3 style="margin: 0 0 4px; font-size: 16px; color: #2d3748;">PO: ${po.po_number}</h3>
+                    <p style="margin: 0 0 2px; font-size: 12px; color: #718096;">Date: ${po.created_at.substring(0, 10)}</p>
+                    <p style="margin: 0; font-size: 12px; color: #718096;">Status: <span style="font-weight:bold; color: #2b6cb0;">${po.status.toUpperCase()}</span></p>
+                </div>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 30px; background-color: #f7fafc; padding: 16px; border-radius: 8px; border: 1px solid #edf2f7;">
+                <div>
+                    <span style="font-size: 11px; text-transform: uppercase; color: #718096; font-weight: bold;">Processing Parameters</span>
+                    <p style="margin: 4px 0 2px; font-size: 14px;"><strong>Process Type:</strong> ${po.process_type}</p>
+                    <p style="margin: 0; font-size: 14px;"><strong>Process:</strong> ${po.process || 'None'}</p>
+                </div>
+                <div>
+                    <span style="font-size: 11px; text-transform: uppercase; color: #718096; font-weight: bold;">Assignment Control</span>
+                    <p style="margin: 4px 0 0; font-size: 14px;"><strong>Fabric Incharge:</strong> ${po.fabric_incharge || 'None'}</p>
+                </div>
+            </div>
+            
+            <table style="width: 100%; border-collapse: collapse; margin-bottom: 24px;">
+                <thead>
+                    <tr style="border-bottom: 2px solid #cbd5e0; text-align: left; color: #718096; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px;">
+                        <th style="padding-bottom: 8px; width: 40px;">#</th>
+                        <th style="padding-bottom: 8px;">Fabric (UOM/GSM)</th>
+                        <th style="padding-bottom: 8px;">Colour</th>
+                        <th style="padding-bottom: 8px;">DIA</th>
+                        <th style="padding-bottom: 8px; text-align: right;">Quantity</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${itemsRows}
+                </tbody>
+            </table>
+            
+            <div style="display: flex; justify-content: flex-end; margin-top: 10px;">
+                <p style="margin: 0; font-size: 16px; font-weight: bold; color: #0b3a4e;">Total Quantity: ${po.total_qty.toFixed(2)}</p>
+            </div>
+        `;
+        
+        openModal('viewPOModal');
+    }
+
+    function printPOArea() {
+        const printContent = document.getElementById('viewPOPrintArea').innerHTML;
+        const originalContent = document.body.innerHTML;
+        
+        document.body.innerHTML = `
+            <div style="padding: 40px; max-width: 800px; margin: 0 auto;">
+                ${printContent}
+            </div>
+        `;
+        window.print();
+        document.body.innerHTML = originalContent;
+        // reload to restore bindings
+        window.location.reload();
+    }
+
+    // Edit PO modal builder
+    function openEditPOModal(po) {
+        document.getElementById('edit_po_id').value = po.id;
+        document.getElementById('e_po_number').value = po.po_number;
+        document.getElementById('e_status').value = po.status;
+        document.getElementById('e_process_type').value = po.process_type;
+        
+        handlePOModalTypeChange('e', po.process, po.fabric_incharge);
+        
+        const tbody = document.querySelector('#editPOItemsTable tbody');
+        tbody.innerHTML = '';
+        po.order_items.forEach((item, index) => {
+            tbody.innerHTML += `
+                <tr>
+                    <td>${index + 1}</td>
+                    <td>${item.fabric_name} (${item.uom || '-'} / ${item.gsm || '-'})</td>
+                    <td>${item.colour.join(', ')}</td>
+                    <td>${item.dia.join(', ')}</td>
+                    <td>
+                        <input type="hidden" name="item_index[]" value="${index}">
+                        <input type="number" step="0.01" min="0" name="item_qty[]" value="${item.order_qty}" style="width: 100px; padding: 4px 8px; border-radius: 4px; border: 1px solid #cbd5e0;">
+                    </td>
+                </tr>
+            `;
+        });
+        
+        openModal('editPOModal');
+    }
+</script>
+</body>
+</html>

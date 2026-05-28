@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{ title }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<div class="container">
+    {% include 'sidebar.html' %}
+
+    <div class="main">
+        <h1>{{ title }}</h1>
+        <p>This page has been scaffolded for the Fabric Stock Management web app.</p>
+    </div>
+</div>
+</body>
+</html>

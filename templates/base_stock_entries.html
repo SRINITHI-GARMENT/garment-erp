@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{ title }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<div class="container">
+    {% include 'sidebar.html' %}
+
+    <div class="main">
+        <h1>{{ title }}</h1>
+
+        {% if error %}
+            <div class="alert">{{ error }}</div>
+        {% endif %}
+
+        <form id="entryForm" method="POST" action="{{ url_for('stock_entries', entry_type=entry_type) }}" class="stock-form" enctype="multipart/form-data">
+            <input type="hidden" name="edit_id" value="">
+            <label>Fabric</label>
+            <select id="fabricSelect" name="fabric_id" required>
+                <option value="">-- Select Fabric --</option>
+                {% for fabric in fabrics %}
+                <option value="{{ fabric.id }}">{{ fabric.name }} ({{ fabric.uom }} / {{ fabric.gsm }})</option>
+                {% endfor %}
+            </select>
+
+            <label>Colour</label>
+            <select id="colourSelect" name="colour" required>
+                <option value="">-- Select Colour --</option>
+            </select>
+
+            <label>DIA</label>
+            <select id="diaSelect" name="dia" required>
+                <option value="">-- Select DIA --</option>
+            </select>
+
+            <label>{{ entry_label }} Quantity</label>
+            <input name="quantity" type="number" step="0.01" placeholder="Enter quantity" required>
+
+            <label>Min Purchase Qty</label>
+            <input id="minPurchaseInput" name="min_purchase_qty" type="number" step="0.01" placeholder="Optional minimum purchase quantity">
+
+            
+
+            <button type="submit" class="btn edit">Save {{ entry_label }}</button>
+            <a href="/actual_stock" class="btn secondary">View Actual Stock</a>
+        </form>
+        <script>
+            const fabricOptions = {{ fabrics | tojson }};
+            const fabricSelect = document.getElementById('fabricSelect');
+            const colourSelect = document.getElementById('colourSelect');
+            const diaSelect = document.getElementById('diaSelect');
+
+            function setOptions(select, values, emptyLabel) {
+                select.innerHTML = '';
+                const placeholderOption = document.createElement('option');
+                placeholderOption.value = '';
+                placeholderOption.textContent = emptyLabel;
+                select.appendChild(placeholderOption);
+
+                if (!values || values.length === 0) {
+                    return;
+                }
+                values.forEach(value => {
+                    const option = document.createElement('option');
+                    option.value = value;
+                    option.textContent = value;
+                    select.appendChild(option);
+                });
+            }
+
+            function updateFabricOptions() {
+                const fabricId = fabricSelect.value;
+                const fabric = fabricOptions.find(f => String(f.id) === fabricId);
+                setOptions(colourSelect, fabric ? fabric.colour : [], '-- Select Colour --');
+                setOptions(diaSelect, fabric ? fabric.dia : [], '-- Select DIA --');
+            }
+
+            fabricSelect.addEventListener('change', updateFabricOptions);
+            document.addEventListener('DOMContentLoaded', updateFabricOptions);
+        </script>
+
+        <form method="POST" action="{{ url_for('stock_entries', entry_type=entry_type) }}" class="stock-form" enctype="multipart/form-data">
+            <label>Upload Excel</label>
+            <input type="file" name="excel_file" accept=".xlsx" required>
+            <button type="submit" name="upload_excel" class="btn edit">Upload from Excel</button>
+            <button type="submit" name="replace_excel" class="btn secondary">Replace Data from Excel</button>
+            <a href="{{ url_for('export_stock', entry_type=entry_type) }}" class="btn secondary">Export to Excel</a>
+        </form>
+
+        <h2>{{ title }} Entries</h2>
+        <div class="summary">Total {{ entry_label }}: {{ total_quantity }}</div>
+        {% set filter_fields = [
+            {'key': 'fabric', 'label': 'Fabric'},
+            {'key': 'uom', 'label': 'UOM'},
+            {'key': 'gsm', 'label': 'GSM'},
+            {'key': 'colour', 'label': 'Colour'},
+            {'key': 'dia', 'label': 'DIA'}
+        ] %}
+        {% set filter_action = url_for('stock_entries', entry_type=entry_type) %}
+        {% set clear_url = url_for('stock_entries', entry_type=entry_type) %}
+        {% set export_url = url_for('export_stock', entry_type=entry_type, **request.args) %}
+        {% set hidden_fields = {} %}
+        {% include '_advanced_filters.html' %}
+        <form method="POST" action="{{ url_for('delete_stock_entries', entry_type=entry_type) }}" id="deleteForm">
+            <button type="submit" name="delete_selected" class="btn danger" onclick="return confirm('Delete selected rows?')">Delete Selected</button>
+        </form>
+        <table class="data-table">
+            <tr>
+                <th></th>
+                <th>#</th>
+                <th>Fabric</th>
+                <th>UOM</th>
+                <th>GSM</th>
+                <th>Colour</th>
+                <th>DIA</th>
+                <th>Quantity</th>
+                <th>Min Purchase Qty</th>
+                <th>Created At</th>
+                <th>Actions</th>
+            </tr>
+            {% for row in rows %}
+            <tr data-colour="{{ row.colour | join(', ') }}" data-dia="{{ row.dia | join(', ') }}">
+                <td><input form="deleteForm" type="checkbox" name="selected_ids" value="{{ row.id }}"></td>
+                <td>{{ loop.index }}</td>
+                <td>{{ row.fabric_name }}</td>
+                <td>{{ row.uom }}</td>
+                <td>{{ row.gsm }}</td>
+                <td>{{ row.colour | join(', ') }}</td>
+                <td>{{ row.dia | join(',') }}</td>
+                <td>{{ row.quantity }}</td>
+                <td>{{ row.min_purchase_qty if row.min_purchase_qty else '-' }}</td>
+                <td>{{ row.created_at }}</td>
+                <td>
+                    <button type="button" class="btn edit" onclick="startEdit(this)" 
+                        data-id="{{ row.id }}"
+                        data-fabric-id="{{ row.fabric_id }}"
+                        data-colour="{{ row.colour | join(',') }}"
+                        data-dia="{{ row.dia | join(',') }}"
+                        data-quantity="{{ row.quantity }}"
+                        data-min_purchase_qty="{{ row.min_purchase_qty }}"
+                    >Edit</button>
+                </td>
+            </tr>
+            {% endfor %}
+        </table>
+        <script>
+            function startEdit(el) {
+                const form = document.getElementById('entryForm');
+                const editIdInput = form.querySelector('input[name="edit_id"]');
+                const fabricSelect = document.getElementById('fabricSelect');
+                const colourSelect = document.getElementById('colourSelect');
+                const diaSelect = document.getElementById('diaSelect');
+                const quantityInput = document.querySelector('input[name="quantity"]');
+                const minPurchaseInput = document.getElementById('minPurchaseInput');
+
+                const id = el.getAttribute('data-id');
+                const fabricId = el.getAttribute('data-fabric-id');
+                const colour = el.getAttribute('data-colour');
+                const dia = el.getAttribute('data-dia');
+                const quantity = el.getAttribute('data-quantity');
+                const minQty = el.getAttribute('data-min_purchase_qty');
+
+                editIdInput.value = id;
+                fabricSelect.value = fabricId;
+                fabricSelect.dispatchEvent(new Event('change'));
+                setTimeout(() => {
+                    if (colour) colourSelect.value = colour.split(',')[0];
+                    if (dia) diaSelect.value = dia.split(',')[0];
+                }, 50);
+                quantityInput.value = quantity;
+                minPurchaseInput.value = minQty || '';
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+        </script>
+    </div>
+</div>
+</body>
+</html>

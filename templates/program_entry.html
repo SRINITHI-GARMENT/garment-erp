@@ -9,25 +9,7 @@
 <div class="container">
 
 <!-- SIDEBAR -->
-<div class="sidebar">
-    <h2>SRINITHI GARMENT</h2>
-
-    <ul>
-        <li><a href="/dashboard">🏠 Dashboard</a></li>
-        <li class="menu-title">MASTER</li>
-        <li><a href="/colour">🎨 Colour Master</a></li>
-        <li><a href="/size">📏 Size Master</a></li>
-        <li><a href="/fabric">🧵 Fabric Master</a></li>
-        <li><a href="/product">📦 Product Master</a></li>
-        <li><a href="/supplier">🏭 Supplier Master</a></li>
-        <li><a href="/users">👥 User Master</a></li>
-        <li class="menu-title">PROGRAM</li>
-        <li><a href="/program">📋 Program Entry</a></li>
-        <li><a href="/overall_programs">📊 Overall Programs</a></li>
-        <li class="menu-title">ACCOUNT</li>
-        <li><a href="/logout">🚪 Logout</a></li>
-    </ul>
-</div>
+{% include 'sidebar.html' %}
 
 <!-- MAIN CONTENT -->
 <div class="main">
@@ -36,55 +18,78 @@
 
 <form method="POST" class="form-card">
 
-<!-- FABRIC -->
-<select name="fabric" id="fabric">
-<option value="">Select Fabric</option>
-{% for f in fabrics %}
-<option value="{{ f.name }} ({{ f.gsm }})" data-dia='{{ f.dia | tojson }}'>
-{{ f.name }} ({{ f.gsm }})
-</option>
-{% endfor %}
-</select>
+<!-- ROW 1: FABRIC & DIA -->
+<div class="form-grid">
+    <div class="form-group">
+        <label>Fabric</label>
+        <select name="fabric" id="fabric" required>
+            <option value="">Select Fabric</option>
+            {% for f in fabrics %}
+            <option value="{{ f.name }} ({{ f.gsm }})" data-dia='{{ f.dia | tojson }}'>
+            {{ f.name }} ({{ f.gsm }})
+            </option>
+            {% endfor %}
+        </select>
+    </div>
 
-<!-- DIA -->
-<select name="dia" id="dia">
-<option>Select DIA</option>
-</select>
+    <div class="form-group">
+        <label>DIA</label>
+        <select name="dia" id="dia" required>
+            <option>Select DIA</option>
+        </select>
+    </div>
+</div>
 
-<!-- PRODUCT TYPE -->
-<select name="type" id="type">
-<option value="">Select Type</option>
-<option value="Brand">Brand</option>
-<option value="Production">Production</option>
-</select>
+<!-- ROW 2: TYPE & PRODUCT -->
+<div class="form-grid">
+    <div class="form-group">
+        <label>Brand</label>
+        <select name="type" id="type" required>
+            <option value="">Select Type</option>
+            <option value="Brand">Brand</option>
+            <option value="Production">Production</option>
+        </select>
+    </div>
 
-<!-- PRODUCT -->
-<select name="product" id="product">
-<option value="">Select Product</option>
+    <div class="form-group">
+        <label>Product</label>
+        <select name="product" id="product" required>
+            <option value="">Select Product</option>
+            {% for p in products %}
+            <option value="{{ p.name }}"
+            data-fabric="{{ p.fabric }}"
+            data-type="{{ p.type }}"
+            data-sizes='{{ p.sizes | tojson }}'
+            data-colors='{{ p.colors | tojson }}'>
+            {{ p.name }}
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+</div>
 
-{% for p in products %}
-<option value="{{ p.name }}"
-data-fabric="{{ p.fabric }}"
-data-type="{{ p.type }}"
-data-sizes='{{ p.sizes | tojson }}'
-data-colors='{{ p.colors | tojson }}'>
-{{ p.name }}
-</option>
-{% endfor %}
-</select>
+<!-- SIZE & COLOUR SECTION -->
+<div class="size-colour-wrapper">
 
-<hr>
+    <!-- SIZE -->
+    <div class="size-section">
+        <h3>SIZE</h3>
+        <div id="sizeBox"></div>
+        <button type="button" onclick="addSize()" class="btn secondary">+ ADD</button>
+    </div>
 
-<h3>SIZE</h3>
-<div id="sizeBox"></div>
-<button type="button" onclick="addSize()">+ ADD</button>
+    <!-- COLOUR -->
+    <div class="colour-section">
+        <h3>COLOUR</h3>
+        <div id="colorBox"></div>
+        <button type="button" onclick="addColor()" class="btn secondary">+ ADD</button>
+    </div>
 
-<h3>COLOUR</h3>
-<div id="colorBox"></div>
-<button type="button" onclick="addColor()">+ ADD</button>
+</div>
 
-<br><br>
-<button type="submit">Save Program</button>
+<div style="display: flex; gap: 12px; margin-top: 28px; justify-content: center;">
+    <button type="submit" class="btn edit" style="min-width: 200px; font-size: 16px; padding: 14px 28px;">Save Program</button>
+</div>
 
 </form>
 
@@ -108,6 +113,7 @@ data-colors='{{ p.colors | tojson }}'>
 </select>
 
 </div>
+
 
 <table class="data-table">
 <thead>

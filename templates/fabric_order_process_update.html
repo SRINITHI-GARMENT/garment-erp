@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{ title }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<div class="container">
+    {% include 'sidebar.html' %}
+
+    <div class="main">
+        <h1>Process Update</h1>
+        {% if error %}
+            <div class="alert">{{ error }}</div>
+        {% endif %}
+
+        <div class="summary" style="margin-bottom: 18px;">
+            PO {{ order.po_number }} | {{ item.fabric_name }} ({{ item.uom or '-' }} / {{ item.gsm or '-' }}) |
+            {{ item.colour | join(', ') }} | {{ item.dia | join(', ') }} |
+            Current Qty: {{ current_qty }}
+        </div>
+
+        <form method="POST" class="stock-form" style="max-width: 720px;">
+            <label>Split / Move Quantity</label>
+            <input type="number" name="move_qty" min="0.01" max="{{ current_qty }}" step="0.01" value="{{ current_qty }}" required>
+
+            <label>Process Type</label>
+            <select name="process_type" id="p_process_type" onchange="handleProcessTypeChange()" required>
+                <option value="OWN PROCESS" {% if item.process_type == 'OWN PROCESS' %}selected{% endif %}>OWN PROCESS</option>
+                <option value="FABRIC PURCHASE" {% if item.process_type == 'FABRIC PURCHASE' %}selected{% endif %}>FABRIC PURCHASE</option>
+            </select>
+
+            <label>Next Process</label>
+            <select name="process" id="p_process" required>
+                <option value="">-- Select Process --</option>
+            </select>
+
+            <label>Fabric Incharge</label>
+            <select name="fabric_incharge" id="p_fabric_incharge" required>
+                <option value="">-- Select Incharge --</option>
+            </select>
+
+            <button type="submit" class="btn edit">Update Process</button>
+            <a href="{{ url_for('fabric_orders', tab='report') }}" class="btn secondary">Back to Report</a>
+        </form>
+    </div>
+</div>
+
+<script>
+    const processDetailsMapping = {{ process_details | tojson }};
+    const allProcesses = {{ processes | tojson }};
+    const allIncharges = {{ incharges | tojson }};
+    const selectedProcess = {{ item.process | tojson }};
+    const selectedIncharge = {{ item.fabric_incharge | tojson }};
+
+    function addOption(select, value, text, selectedValue) {
+        const option = document.createElement('option');
+        option.value = value;
+        option.textContent = text;
+        if (value === selectedValue) option.selected = true;
+        select.appendChild(option);
+    }
+
+    function handleProcessTypeChange() {
+        const type = document.getElementById('p_process_type').value;
+        const processSelect = document.getElementById('p_process');
+        const inchargeSelect = document.getElementById('p_fabric_incharge');
+        processSelect.innerHTML = '<option value="">-- Select Process --</option>';
+        inchargeSelect.innerHTML = '<option value="">-- Select Incharge --</option>';
+
+        const filtered = processDetailsMapping.filter(row => row.process_type === type);
+        const processNames = new Set();
+        const inchargeNames = new Set();
+        filtered.forEach(row => {
+            if (row.process_name && !processNames.has(row.process_name)) {
+                processNames.add(row.process_name);
+                addOption(processSelect, row.process_name, row.process_name, selectedProcess);
+            }
+            if (row.fabric_incharge_name && !inchargeNames.has(row.fabric_incharge_name)) {
+                inchargeNames.add(row.fabric_incharge_name);
+                addOption(inchargeSelect, row.fabric_incharge_name, row.fabric_incharge_name, selectedIncharge);
+            }
+        });
+
+        if (!filtered.length) {
+            allProcesses.forEach(row => addOption(processSelect, row.name, row.name, selectedProcess));
+            allIncharges.forEach(row => addOption(inchargeSelect, row.name, row.name, selectedIncharge));
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', handleProcessTypeChange);
+</script>
+</body>
+</html>

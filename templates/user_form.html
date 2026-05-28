@@ -48,32 +48,7 @@
 <div class="container">
 
 <!-- SIDEBAR -->
-<div class="sidebar">
-    <h2>SRINITHI GARMENT</h2>
-
-    {% if current_user %}
-    <p style="color:#fff;font-size:13px;margin:0 0 10px 0;">
-        Logged in as: <b>{{ current_user.username }}</b> ({{ current_user.role }})
-    </p>
-    {% endif %}
-
-    <ul>
-        <li><a href="/dashboard">🏠 Dashboard</a></li>
-
-        <li class="menu-title">MASTER</li>
-        <li><a href="/colour">🎨 Colour Master</a></li>
-        <li><a href="/size">📏 Size Master</a></li>
-        <li><a href="/fabric">🧵 Fabric Master</a></li>
-        <li><a href="/product">📦 Product Master</a></li>
-        <li><a href="/users">👥 User Master</a></li>
-
-        <li class="menu-title">PROGRAM</li>
-        <li><a href="/program">📋 Program Entry</a></li>
-        <li><a href="/overall_programs">📊 Overall Programs</a></li>
-
-        <li><a href="/logout">🚪 Logout</a></li>
-    </ul>
-</div>
+{% include 'sidebar.html' %}
 
 <!-- MAIN CONTENT -->
 <div class="main">
@@ -115,8 +90,8 @@
     </p>
 
     <div class="perm-actions">
-        <button type="button" onclick="checkAll(true)">Select All</button>
-        <button type="button" onclick="checkAll(false)">Clear All</button>
+        <button type="button" onclick="checkAll(true)" class="btn secondary">Select All</button>
+        <button type="button" onclick="checkAll(false)" class="btn secondary">Clear All</button>
     </div>
 
     {% set existing = user.permissions if user else [] %}
@@ -140,8 +115,8 @@
     {% endfor %}
 
     <br>
-    <button type="submit">{% if user %}Update User{% else %}Save User{% endif %}</button>
-    <a href="/users"><button type="button">Cancel</button></a>
+    <button type="submit" class="btn edit">{% if user %}Update User{% else %}Save User{% endif %}</button>
+    <a href="/users"><button type="button" class="btn secondary">Cancel</button></a>
 
 </form>
 

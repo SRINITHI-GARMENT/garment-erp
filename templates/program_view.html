@@ -28,8 +28,8 @@ th { background: #333; color: white; }
 
 <body>
 
-<button type="button" onclick="printPage()">🖨️ Print</button>
-<a href="/overall_programs"><button type="button">⬅ Back</button></a>
+<button type="button" onclick="printPage()" class="btn secondary">🖨️ Print</button>
+<a href="/overall_programs"><button type="button" class="btn secondary">⬅ Back</button></a>
 
 <h2>PROGRAM DETAILS</h2>
 
@@ -69,7 +69,7 @@ th { background: #333; color: white; }
             {% endfor %}
         </select>
         <br>
-        <button type="submit">Proceed ➜ Print</button>
+        <button type="submit" class="btn edit">Proceed ➜ Print</button>
     </form>
 </div>
 {% endif %}

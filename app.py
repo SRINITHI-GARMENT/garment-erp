@@ -1,11 +1,13 @@
 import os
 import uuid
+import json
 from datetime import datetime
 from collections import defaultdict
 from functools import wraps
+from io import BytesIO
 
 from flask import (
-    Flask, render_template, request, redirect, jsonify, session
+    Flask, render_template, request, redirect, jsonify, session, send_file
 )
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import text
@@ -58,6 +60,26 @@ PERMISSION_GROUPS = [
     ("User Master", [
         ("user_view","View"),("user_add","Add"),
         ("user_edit","Edit"),("user_delete","Delete"),
+    ]),
+    ("Fabric Base Stock", [
+        ("base_stock_view","View"),("base_stock_add","Add"),
+        ("base_stock_edit","Edit"),("base_stock_delete","Delete"),
+    ]),
+    ("Fabric Actual Stock", [
+        ("actual_stock_view","View"),("actual_stock_add","Add"),
+        ("actual_stock_edit","Edit"),("actual_stock_delete","Delete"),
+    ]),
+    ("Fabric Requirement", [
+        ("requirement_view","View"),("requirement_add","Add"),
+        ("requirement_edit","Edit"),("requirement_delete","Delete"),
+    ]),
+    ("Fabric Orders", [
+        ("fabric_orders_view","View"),("fabric_orders_add","Add"),
+        ("fabric_orders_edit","Edit"),("fabric_orders_delete","Delete"),('fabric_orders_manual_add',"Manual order"),
+    ]),
+    ("Process Master", [
+        ("process_view","View"),("process_add","Add"),
+        ("process_edit","Edit"),("process_delete","Delete"),
     ]),
 ]
 ALL_PERMISSIONS = [code for _, items in PERMISSION_GROUPS for code, _ in items]
@@ -175,6 +197,83 @@ class Counter(db.Model):
     value = db.Column(db.Integer, default=0)
 
 
+# -------- STOCK MANAGEMENT MODELS (from FAB NEW) --------
+class StockEntry(db.Model):
+    __tablename__ = 'stock_entry'
+    id = db.Column(db.Integer, primary_key=True)
+    fabric_id = db.Column(db.Integer, db.ForeignKey('fabrics.id'), nullable=False)
+    entry_type = db.Column(db.String(50), nullable=False)  # base_stock, actual_stock, requirement
+    quantity = db.Column(db.Float, nullable=False)
+    note = db.Column(db.Text)
+    colour_csv = db.Column('colour', db.Text, default='')  # CSV format stored in the DB column named colour
+    dia_csv = db.Column('dia', db.Text, default='')  # CSV format stored in the DB column named dia
+    min_purchase_qty = db.Column(db.Float)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    fabric = db.relationship('Fabric', backref='stock_entries')
+    
+    @property
+    def colour(self): return [x.strip() for x in (self.colour_csv or '').split(',') if x.strip()]
+    @colour.setter
+    def colour(self, values): self.colour_csv = ','.join(values or [])
+    
+    @property
+    def dia(self): return [x.strip() for x in (self.dia_csv or '').split(',') if x.strip()]
+    @dia.setter
+    def dia(self, values): self.dia_csv = ','.join(values or [])
+
+
+class GeneratedOrder(db.Model):
+    __tablename__ = 'generated_orders'
+    id = db.Column(db.Integer, primary_key=True)
+    po_number = db.Column(db.String(255), nullable=False, unique=True)
+    order_items = db.Column(db.Text, nullable=False)  # JSON array stored as text
+    process_type = db.Column(db.String(255))
+    process = db.Column(db.String(255))
+    fabric_incharge = db.Column(db.String(255))
+    status = db.Column(db.String(50), default='Pending')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class FabricIncharge(db.Model):
+    __tablename__ = 'fabric_incharge'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(255), nullable=False, unique=True)
+
+
+class Process(db.Model):
+    __tablename__ = 'process'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(255), nullable=False, unique=True)
+
+
+class ProcessDetails(db.Model):
+    __tablename__ = 'process_details'
+    id = db.Column(db.Integer, primary_key=True)
+    process_type = db.Column(db.String(255), nullable=False)
+    process_id = db.Column(db.Integer, db.ForeignKey('process.id'), nullable=False)
+    fabric_incharge_id = db.Column(db.Integer, db.ForeignKey('fabric_incharge.id'), nullable=False)
+    
+    process = db.relationship('Process', backref='details')
+    fabric_incharge = db.relationship('FabricIncharge', backref='process_details')
+
+
+# -------- STOCK MANAGEMENT CONSTANTS --------
+STOCK_TYPES = {
+    'base_stock': 'Fabric Base Stock',
+    'actual_stock': 'Fabric Actual Stock',
+    'requirement': 'Requirement',
+}
+
+ENTRY_LABELS = {
+    'base_stock': 'Base Stock',
+    'actual_stock': 'Actual Stock',
+    'requirement': 'Requirement',
+}
+
+ALLOWED_EXCEL_EXTENSIONS = {'xlsx'}
+
+
 # ---------------- AUTH HELPERS ----------------
 def current_user():
     uid = session.get("user_id")
@@ -283,7 +382,424 @@ def _grouped_programs():
     return out
 
 
-# ---------------- LOGIN / LOGOUT ----------------
+# -------- STOCK MANAGEMENT HELPERS --------
+from openpyxl import Workbook, load_workbook
+
+def allowed_excel_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXCEL_EXTENSIONS
+
+def parse_list_field(field_name):
+    values = [value.strip() for value in request.form.getlist(field_name) if value.strip()]
+    return values
+
+def request_list_arg(name):
+    values = []
+    for raw_value in request.args.getlist(name):
+        values.extend(part.strip() for part in raw_value.split(',') if part.strip())
+    return values
+
+def request_filter_values(keys):
+    return {key: request_list_arg(key) for key in keys}
+
+def filter_values(selected_filters, key):
+    value = (selected_filters or {}).get(key, [])
+    if isinstance(value, str):
+        return [part.strip() for part in value.split(',') if part.strip()]
+    return [str(part).strip() for part in value if str(part).strip()]
+
+def matches_filter(value, selected_values):
+    selected_values = [str(v).lower() for v in selected_values if str(v).strip()]
+    if not selected_values:
+        return True
+    return str(value or '').lower() in selected_values
+
+def matches_list_filter(values, selected_values):
+    selected_values = [str(v).lower() for v in selected_values if str(v).strip()]
+    if not selected_values:
+        return True
+    return any(str(value or '').lower() in selected_values for value in values or [])
+
+def build_filter_options(rows, include_result=False):
+    options = {}
+    options['fabric'] = sorted({row.get('fabric_name') for row in rows if row.get('fabric_name')})
+    options['uom'] = sorted({row.get('uom') for row in rows if row.get('uom')})
+    options['gsm'] = sorted({row.get('gsm') for row in rows if row.get('gsm')})
+    options['colour'] = sorted({value for row in rows for value in row.get('colour', []) if value})
+    options['dia'] = sorted({value for row in rows for value in row.get('dia', []) if value})
+    if include_result:
+        options['result'] = sorted({row.get('result_type') for row in rows if row.get('result_type')})
+    return options
+
+def filter_stock_rows(rows, selected_filters):
+    filtered = []
+    for row in rows:
+        if not matches_filter(row.get('fabric_name'), filter_values(selected_filters, 'fabric')):
+            continue
+        if not matches_filter(row.get('uom'), filter_values(selected_filters, 'uom')):
+            continue
+        if not matches_filter(row.get('gsm'), filter_values(selected_filters, 'gsm')):
+            continue
+        if not matches_list_filter(row.get('colour'), filter_values(selected_filters, 'colour')):
+            continue
+        if not matches_list_filter(row.get('dia'), filter_values(selected_filters, 'dia')):
+            continue
+        filtered.append(row)
+    return filtered
+
+def get_fabrics():
+    fabrics = Fabric.query.order_by(Fabric.name).all()
+    return [_to_dict_fabric(f) for f in fabrics]
+
+def get_stock_entries(entry_type, selected_filters=None):
+    entries = StockEntry.query.filter(StockEntry.entry_type == entry_type).order_by(StockEntry.created_at.desc()).all()
+    parsed_rows = []
+    for entry in entries:
+        fabric = entry.fabric
+        row_dict = {
+            'id': entry.id,
+            'fabric_id': entry.fabric_id,
+            'entry_type': entry.entry_type,
+            'quantity': entry.quantity,
+            'note': entry.note,
+            'colour': entry.colour,
+            'dia': entry.dia,
+            'min_purchase_qty': entry.min_purchase_qty,
+            'created_at': entry.created_at.isoformat() if entry.created_at else None,
+            'fabric_name': fabric.name if fabric else None,
+            'uom': fabric.uom if fabric else None,
+            'gsm': fabric.gsm if fabric else None,
+            'fabric_colour': fabric.colour if fabric else [],
+            'fabric_dia': fabric.dia if fabric else [],
+        }
+        parsed_rows.append(row_dict)
+    return filter_stock_rows(parsed_rows, selected_filters or {})
+
+def order_item_process(order, item):
+    return {
+        'process_type': item.get('process_type') or order.get('process_type') or '',
+        'process': item.get('process') or order.get('process') or '',
+        'fabric_incharge': item.get('fabric_incharge') or order.get('fabric_incharge') or '',
+    }
+
+def generated_order_wip_rows():
+    rows = []
+    orders = GeneratedOrder.query.filter(
+        (GeneratedOrder.status.is_(None)) | (GeneratedOrder.status != 'Completed')
+    ).order_by(GeneratedOrder.created_at.desc()).all()
+    
+    for order in orders:
+        order_dict = {
+            'id': order.id,
+            'po_number': order.po_number,
+            'process_type': order.process_type or '',
+            'process': order.process or '',
+            'fabric_incharge': order.fabric_incharge or '',
+            'status': order.status or 'Pending',
+        }
+        
+        for index, item in enumerate(json.loads(order.order_items or '[]')):
+            process_data = order_item_process(order_dict, item)
+            rows.append({
+                'order_id': order.id,
+                'item_index': index,
+                'po_number': order.po_number,
+                'fabric_name': item.get('fabric_name'),
+                'uom': item.get('uom'),
+                'gsm': item.get('gsm'),
+                'colour': item.get('colour', []),
+                'dia': item.get('dia', []),
+                'quantity': float(item.get('order_qty') or 0),
+                'process_type': process_data['process_type'],
+                'process': process_data['process'],
+                'fabric_incharge': process_data['fabric_incharge'],
+                'status': order.status or 'Pending',
+            })
+    return rows
+
+def get_order_wip_quantity(fabric_name, uom, gsm, colour, dia):
+    total = 0.0
+    target_colour = [c for c in ([colour] if isinstance(colour, str) else colour or []) if c]
+    target_dia = [d for d in ([dia] if isinstance(dia, str) else dia or []) if d]
+    for row in generated_order_wip_rows():
+        if row.get('fabric_name') != fabric_name:
+            continue
+        if row.get('uom') != uom or row.get('gsm') != gsm:
+            continue
+        if target_colour and row.get('colour') != target_colour:
+            continue
+        if target_dia and row.get('dia') != target_dia:
+            continue
+        total += row.get('quantity') or 0
+    return total
+
+def build_requirement_rows(selected_filters=None):
+    fabrics = get_fabrics()
+    selected_filters = selected_filters or {}
+    
+    rows = []
+    for fabric in fabrics:
+        fabric_id = fabric['id']
+        fabric_colours = fabric.get('colour', [])
+        fabric_dias = fabric.get('dia', [])
+
+        combos = set()
+        def add_combo(c, d):
+            combos.add((c, d))
+
+        if fabric_colours and fabric_dias:
+            for c in fabric_colours:
+                for d in fabric_dias:
+                    add_combo(c, d)
+        elif fabric_colours:
+            for c in fabric_colours:
+                add_combo(c, None)
+        elif fabric_dias:
+            for d in fabric_dias:
+                add_combo(None, d)
+        else:
+            add_combo(None, None)
+
+        stock_entries_q = StockEntry.query.filter(
+            StockEntry.fabric_id == fabric_id,
+            StockEntry.entry_type.in_(['base_stock', 'actual_stock'])
+        ).all()
+        
+        for stock_entry in stock_entries_q:
+            stock_colours = stock_entry.colour
+            stock_dias = stock_entry.dia
+            if stock_colours and stock_dias:
+                for c in stock_colours:
+                    for d in stock_dias:
+                        add_combo(c, d)
+            elif stock_colours:
+                for c in stock_colours:
+                    add_combo(c, None)
+            elif stock_dias:
+                for d in stock_dias:
+                    add_combo(None, d)
+            else:
+                add_combo(None, None)
+
+        for wip_row in generated_order_wip_rows():
+            if (
+                wip_row.get('fabric_name') != fabric['name'] or
+                wip_row.get('uom') != fabric.get('uom') or
+                wip_row.get('gsm') != fabric.get('gsm')
+            ):
+                continue
+            wip_colours = wip_row.get('colour') or []
+            wip_dias = wip_row.get('dia') or []
+            if wip_colours and wip_dias:
+                for c in wip_colours:
+                    for d in wip_dias:
+                        add_combo(c, d)
+            elif wip_colours:
+                for c in wip_colours:
+                    add_combo(c, None)
+            elif wip_dias:
+                for d in wip_dias:
+                    add_combo(None, d)
+            else:
+                add_combo(None, None)
+
+        for colour, dia in combos:
+            colour_pattern = None
+            dia_pattern = None
+            
+            base_q = db.session.query(db.func.coalesce(db.func.sum(StockEntry.quantity), 0)).filter(
+                StockEntry.fabric_id == fabric_id,
+                StockEntry.entry_type == 'base_stock'
+            )
+            actual_q = db.session.query(db.func.coalesce(db.func.sum(StockEntry.quantity), 0)).filter(
+                StockEntry.fabric_id == fabric_id,
+                StockEntry.entry_type == 'actual_stock'
+            )
+            req_q = db.session.query(db.func.coalesce(db.func.sum(StockEntry.quantity), 0)).filter(
+                StockEntry.fabric_id == fabric_id,
+                StockEntry.entry_type == 'requirement'
+            )
+
+            if colour is not None:
+                colour_pattern = '%' + str(colour) + '%'
+                base_q = base_q.filter(StockEntry.colour_csv.like(colour_pattern))
+                actual_q = actual_q.filter(StockEntry.colour_csv.like(colour_pattern))
+                req_q = req_q.filter(StockEntry.colour_csv.like(colour_pattern))
+            if dia is not None:
+                dia_pattern = '%' + str(dia) + '%'
+                base_q = base_q.filter(StockEntry.dia_csv.like(dia_pattern))
+                actual_q = actual_q.filter(StockEntry.dia_csv.like(dia_pattern))
+                req_q = req_q.filter(StockEntry.dia_csv.like(dia_pattern))
+
+            base = base_q.scalar() or 0
+            actual = actual_q.scalar() or 0
+            req_qty = req_q.scalar() or 0
+            
+            wip = get_order_wip_quantity(
+                fabric['name'],
+                fabric.get('uom'),
+                fabric.get('gsm'),
+                [colour] if colour is not None else [],
+                [dia] if dia is not None else [],
+            )
+            
+            req_detail = actual + wip - base
+
+            min_purchase_q = db.session.query(db.func.coalesce(db.func.min(StockEntry.min_purchase_qty), 0)).filter(
+                StockEntry.fabric_id == fabric_id,
+                StockEntry.entry_type == 'base_stock'
+            )
+            if colour is not None:
+                min_purchase_q = min_purchase_q.filter(StockEntry.colour_csv.like(colour_pattern))
+            if dia is not None:
+                min_purchase_q = min_purchase_q.filter(StockEntry.dia_csv.like(dia_pattern))
+
+            min_purchase_qty = min_purchase_q.scalar() or 0
+
+            row = {
+                'fabric_id': fabric_id,
+                'fabric_name': fabric['name'],
+                'uom': fabric.get('uom'),
+                'gsm': fabric.get('gsm'),
+                'colour': [colour] if colour is not None else [],
+                'dia': [dia] if dia is not None else [],
+                'actual_stock': actual,
+                'wip': wip,
+                'base_stock': base,
+                'min_order_qty': min_purchase_qty,
+                'requirement_detail': req_detail,
+                'quantity': req_qty,
+                'note': '',
+                'created_at': '',
+                'result_type': 'EXCESS' if req_detail > 0 else 'REQUIRED' if req_detail < 0 else 'BALANCED',
+            }
+            rows.append(row)
+
+    rows = filter_stock_rows(rows, selected_filters)
+    result_filter = filter_values(selected_filters, 'result')
+    if result_filter:
+        rows = [r for r in rows if matches_filter(r.get('result_type'), result_filter)]
+
+    return rows
+
+
+def import_stock_excel(file_stream, entry_type, replace=False):
+    wb = load_workbook(filename=file_stream, data_only=True)
+    ws = wb.active
+    headers = [str(cell.value).strip().lower() if cell.value else '' for cell in next(ws.iter_rows(min_row=1, max_row=1))]
+    mapping = {}
+    for index, name in enumerate(headers):
+        if 'fabric' in name:
+            mapping['fabric'] = index
+        elif 'quantity' in name:
+            mapping['quantity'] = index
+        elif 'note' in name:
+            mapping['note'] = index
+        elif 'colour' in name:
+            mapping['colour'] = index
+        elif 'dia' in name:
+            mapping['dia'] = index
+        elif 'min_purchase' in name or 'min purchase' in name:
+            mapping['min_purchase_qty'] = index
+
+    if 'fabric' not in mapping or 'quantity' not in mapping:
+        return 'Excel file must include Fabric and Quantity columns.'
+
+    fabric_names = {f.name: f.id for f in Fabric.query.all()}
+    new_entries = []
+
+    for row in ws.iter_rows(min_row=2, values_only=True):
+        if not row or not row[mapping['fabric']]:
+            continue
+
+        fabric_name = str(row[mapping['fabric']]).strip()
+        quantity_value = row[mapping['quantity']]
+        note_value = ''
+        colour_value = ''
+        dia_value = ''
+        min_purchase_qty_value = None
+
+        if 'note' in mapping:
+            note_value = str(row[mapping['note']]).strip() if row[mapping['note']] is not None else ''
+        if 'colour' in mapping:
+            colour_value = str(row[mapping['colour']]).strip() if row[mapping['colour']] is not None else ''
+        if 'dia' in mapping:
+            dia_value = str(row[mapping['dia']]).strip() if row[mapping['dia']] is not None else ''
+        if 'min_purchase_qty' in mapping:
+            try:
+                min_purchase_qty_value = float(row[mapping['min_purchase_qty']]) if row[mapping['min_purchase_qty']] is not None else None
+            except (TypeError, ValueError):
+                min_purchase_qty_value = None
+
+        if fabric_name not in fabric_names:
+            return f'Fabric not found: {fabric_name}'
+
+        try:
+            quantity = float(quantity_value)
+        except (TypeError, ValueError):
+            return f'Invalid quantity for fabric {fabric_name}. Must be a number.'
+
+        entry = StockEntry(
+            fabric_id=fabric_names[fabric_name],
+            entry_type=entry_type,
+            quantity=quantity,
+            note=note_value,
+            colour=[value.strip() for value in colour_value.split(',') if value.strip()] if colour_value else [],
+            dia=[value.strip() for value in dia_value.split(',') if value.strip()] if dia_value else [],
+            min_purchase_qty=min_purchase_qty_value,
+        )
+        new_entries.append(entry)
+
+    if replace:
+        StockEntry.query.filter(StockEntry.entry_type == entry_type).delete(synchronize_session=False)
+
+    for entry in new_entries:
+        db.session.add(entry)
+
+    db.session.commit()
+    return None
+
+def export_stock_excel(entry_type, selected_filters=None):
+    wb = Workbook()
+    ws = wb.active
+    if entry_type == 'requirement':
+        ws.append(['Fabric', 'UOM', 'GSM', 'Colour', 'DIA', 'Actual Stock', 'WIP', 'Base Stock', 'Requirement', 'Result'])
+        rows = build_requirement_rows(selected_filters)
+        for row in rows:
+            ws.append([
+                row['fabric_name'],
+                row['uom'],
+                row['gsm'],
+                ', '.join(row['colour']) if row['colour'] else '',
+                ', '.join(row['dia']) if row['dia'] else '',
+                row['actual_stock'],
+                row['wip'],
+                row['base_stock'],
+                row['requirement_detail'],
+                row['result_type'],
+            ])
+    else:
+        rows = get_stock_entries(entry_type, selected_filters)
+        ws.append(['Fabric', 'UOM', 'GSM', 'Colour', 'DIA', 'Quantity', 'Min Purchase Qty', 'Note', 'Created At', 'Entry Type'])
+        for row in rows:
+            ws.append([
+                row['fabric_name'],
+                row['uom'],
+                row['gsm'],
+                ', '.join(row['colour']) if row['colour'] else '',
+                ', '.join(row['dia']) if row['dia'] else '',
+                row['quantity'],
+                row.get('min_purchase_qty', ''),
+                row['note'],
+                row['created_at'],
+                row['entry_type'],
+            ])
+    file_stream = BytesIO()
+    wb.save(file_stream)
+    file_stream.seek(0)
+    return file_stream
+
+
+
 @app.route("/", methods=["GET", "POST"])
 def login():
     error = None
@@ -489,6 +1005,915 @@ def delete_fabric(fid):
     f = Fabric.query.get(fid)
     if f: db.session.delete(f); db.session.commit()
     return redirect("/fabric")
+
+
+# ---------------- STOCK / ORDER FUNCTIONS ----------------
+@app.route('/stock/<entry_type>', methods=['GET', 'POST'])
+@login_required
+def stock_entries(entry_type):
+    u = current_user()
+    permission_map = {
+        'base_stock': 'base_stock_view',
+        'actual_stock': 'actual_stock_view',
+        'requirement': 'requirement_view',
+    }
+    if not u.has(permission_map.get(entry_type, 'program_view')):
+        return "Access denied.", 403
+    if entry_type not in STOCK_TYPES:
+        return redirect('/fabric')
+
+    fabrics = get_fabrics()
+    error = None
+
+    if request.method == 'POST':
+        if 'upload_excel' in request.form or 'replace_excel' in request.form:
+            file = request.files.get('excel_file')
+            if not file or file.filename == '':
+                error = 'Please choose an Excel file to upload.'
+            elif not allowed_excel_file(file.filename):
+                error = 'Only .xlsx files are supported.'
+            else:
+                replace = 'replace_excel' in request.form
+                error = import_stock_excel(file, entry_type, replace)
+                if not error:
+                    return redirect(f'/stock/{entry_type}')
+        else:
+            fabric_id = request.form.get('fabric_id')
+            quantity = request.form.get('quantity', '').strip()
+            note = request.form.get('note', '').strip()
+            colour_value = request.form.get('colour', '').strip()
+            dia_value = request.form.get('dia', '').strip()
+            min_purchase_qty = request.form.get('min_purchase_qty', '').strip()
+            edit_id = request.form.get('edit_id')
+
+            if not fabric_id or not quantity:
+                error = 'Fabric and quantity are required.'
+            else:
+                try:
+                    quantity_value = float(quantity)
+                    min_purchase_qty_value = float(min_purchase_qty) if min_purchase_qty else None
+                    if edit_id:
+                        entry = StockEntry.query.get(edit_id)
+                        if entry:
+                            entry.fabric_id = int(fabric_id)
+                            entry.quantity = quantity_value
+                            entry.note = note
+                            entry.colour = [colour_value] if colour_value else []
+                            entry.dia = [dia_value] if dia_value else []
+                            entry.min_purchase_qty = min_purchase_qty_value
+                    else:
+                        entry = StockEntry(
+                            fabric_id=int(fabric_id),
+                            entry_type=entry_type,
+                            quantity=quantity_value,
+                            note=note,
+                            colour=[colour_value] if colour_value else [],
+                            dia=[dia_value] if dia_value else [],
+                            min_purchase_qty=min_purchase_qty_value,
+                        )
+                        db.session.add(entry)
+                    db.session.commit()
+                    return redirect(f'/stock/{entry_type}')
+                except ValueError:
+                    error = 'Quantity must be a number.'
+
+    selected_filters = request_filter_values(['fabric', 'uom', 'gsm', 'colour', 'dia', 'result'])
+
+    if entry_type == 'requirement':
+        rows = build_requirement_rows(selected_filters)
+        total_quantity = sum(r['quantity'] for r in rows)
+        filter_options = build_filter_options(build_requirement_rows({}), include_result=True)
+    else:
+        rows = get_stock_entries(entry_type, selected_filters)
+        total_quantity = sum(row['quantity'] for row in rows)
+        filter_options = build_filter_options(get_stock_entries(entry_type, {}))
+
+    computed_requirement = None
+    actual_stock_total = None
+    base_total = None
+    wip_total = None
+    result_counts = {'REQUIRED': 0, 'EXCESS': 0, 'BALANCED': 0}
+    result_totals = {'required_qty': 0.0, 'excess_qty': 0.0}
+
+    if entry_type == 'requirement':
+        base_total = db.session.query(db.func.coalesce(db.func.sum(StockEntry.quantity), 0)).filter(
+            StockEntry.entry_type == 'base_stock'
+        ).scalar() or 0
+        wip_total = sum(row.get('quantity') or 0 for row in generated_order_wip_rows())
+        actual_stock_total = db.session.query(db.func.coalesce(db.func.sum(StockEntry.quantity), 0)).filter(
+            StockEntry.entry_type == 'actual_stock'
+        ).scalar() or 0
+        computed_requirement = actual_stock_total + wip_total - base_total
+
+        for row in rows:
+            row['requirement_detail'] = (row.get('actual_stock') or 0) + (row.get('wip') or 0) - (row.get('base_stock') or 0)
+            if row['requirement_detail'] > 0:
+                row['result_type'] = 'EXCESS'
+            elif row['requirement_detail'] < 0:
+                row['result_type'] = 'REQUIRED'
+            else:
+                row['result_type'] = 'BALANCED'
+
+        for row in rows:
+            rt = row.get('result_type')
+            if rt in result_counts:
+                result_counts[rt] += 1
+            if row.get('requirement_detail', 0) > 0:
+                result_totals['excess_qty'] += float(row['requirement_detail'])
+            elif row.get('requirement_detail', 0) < 0:
+                result_totals['required_qty'] += abs(float(row['requirement_detail']))
+
+        base_total = sum((r.get('base_stock') or 0) for r in rows)
+        wip_total = sum((r.get('wip') or 0) for r in rows)
+        actual_stock_total = sum((r.get('actual_stock') or 0) for r in rows)
+        computed_requirement = actual_stock_total + wip_total - base_total
+
+        return render_template(
+            'requirement_report.html',
+            entry_type=entry_type,
+            title=STOCK_TYPES[entry_type],
+            entry_label=ENTRY_LABELS[entry_type],
+            fabrics=fabrics,
+            rows=rows,
+            total_quantity=total_quantity,
+            actual_stock_total=actual_stock_total,
+            base_total=base_total,
+            wip_total=wip_total,
+            computed_requirement=computed_requirement,
+            result_counts=result_counts,
+            result_totals=result_totals,
+            filter_options=filter_options,
+            selected_filters=selected_filters,
+            error=error,
+        )
+
+    template_name = 'stock_entries.html'
+    if entry_type == 'base_stock':
+        template_name = 'base_stock_entries.html'
+    elif entry_type == 'actual_stock':
+        template_name = 'actual_stock_entries.html'
+    
+    return render_template(
+        template_name,
+        entry_type=entry_type,
+        title=STOCK_TYPES[entry_type],
+        entry_label=ENTRY_LABELS[entry_type],
+        fabrics=fabrics,
+        rows=rows,
+        total_quantity=total_quantity,
+        actual_stock_total=actual_stock_total,
+        base_total=base_total,
+        wip_total=wip_total,
+        computed_requirement=computed_requirement,
+        result_counts=result_counts,
+        result_totals=result_totals,
+        filter_options=filter_options,
+        selected_filters=selected_filters,
+        error=error,
+    )
+
+
+@app.route('/stock/<entry_type>/export')
+@login_required
+def export_stock(entry_type):
+    if entry_type not in STOCK_TYPES:
+        return redirect('/fabric')
+    selected_filters = request_filter_values(['fabric', 'uom', 'gsm', 'colour', 'dia', 'result'])
+    file_stream = export_stock_excel(entry_type, selected_filters)
+    return send_file(
+        file_stream,
+        download_name=f'{entry_type}.xlsx',
+        as_attachment=True,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+
+
+@app.route('/stock/<entry_type>/delete', methods=['POST'])
+@login_required
+def delete_stock_entries(entry_type):
+    ids = request.form.getlist('selected_ids')
+    if not ids:
+        return redirect(f'/stock/{entry_type}')
+    clean_ids = []
+    for i in ids:
+        try:
+            clean_ids.append(int(i))
+        except (TypeError, ValueError):
+            continue
+    if not clean_ids:
+        return redirect(f'/stock/{entry_type}')
+    StockEntry.query.filter(StockEntry.id.in_(clean_ids), StockEntry.entry_type == entry_type).delete(synchronize_session=False)
+    db.session.commit()
+    return redirect(f'/stock/{entry_type}')
+
+
+@app.route('/base_stock')
+@login_required
+def base_stock():
+    return redirect('/stock/base_stock')
+
+
+@app.route('/actual_stock')
+@login_required
+def actual_stock():
+    return redirect('/stock/actual_stock')
+
+
+@app.route('/requirement')
+@login_required
+def requirement():
+    return redirect('/stock/requirement')
+
+
+@app.route('/fabric_orders', methods=['GET'])
+@login_required
+def fabric_orders():
+    u = current_user()
+    if not u.has('fabric_orders_view'):
+        return "Access denied.", 403
+    selected_filters = {
+        'fabric': request.args.get('fabric', '').strip(),
+        'uom': request.args.get('uom', '').strip(),
+        'gsm': request.args.get('gsm', '').strip(),
+        'colour': request.args.get('colour', '').strip(),
+        'dia': request.args.get('dia', '').strip(),
+        'result': request.args.get('result', '').strip(),
+    }
+    selected_report_filters = {
+        'po_number': request_list_arg('report_po_number'),
+        'fabric': request_list_arg('report_fabric'),
+        'colour': request_list_arg('report_colour'),
+        'dia': request_list_arg('report_dia'),
+        'process_type': request_list_arg('report_process_type'),
+        'process': request_list_arg('report_process'),
+        'fabric_incharge': request_list_arg('report_fabric_incharge'),
+        'status': request_list_arg('report_status'),
+    }
+
+    rows = build_requirement_rows(selected_filters)
+    frozen_orders = session.get('fabric_orders', [])
+    frozen_map = {
+        (
+            f['fabric_name'],
+            f['uom'],
+            f['gsm'],
+            tuple(f['colour']),
+            tuple(f['dia'])
+        ): float(f.get('order_qty', 0))
+        for f in frozen_orders
+    }
+
+    for index, row in enumerate(rows):
+        row['index'] = index
+        key = (
+            row['fabric_name'],
+            row['uom'],
+            row['gsm'],
+            tuple(row['colour']),
+            tuple(row['dia'])
+        )
+        row['frozen_qty'] = frozen_map.get(key, 0.0)
+        shortage = abs(row['requirement_detail']) if row['requirement_detail'] < 0 else 0.0
+        row['order_suggestion'] = max(0.0, shortage - row['min_order_qty'] + row['frozen_qty'])
+        row['order_qty'] = row['order_suggestion']
+
+    fabrics = get_fabrics()
+    incharges = [{'id': i.id, 'name': i.name} for i in FabricIncharge.query.order_by(FabricIncharge.name).all()]
+    processes = [{'id': p.id, 'name': p.name} for p in Process.query.order_by(Process.name).all()]
+    process_details = db.session.query(
+        ProcessDetails.id,
+        ProcessDetails.process_type,
+        ProcessDetails.process_id,
+        ProcessDetails.fabric_incharge_id,
+        Process.name.label('process_name'),
+        FabricIncharge.name.label('fabric_incharge_name')
+    ).outerjoin(Process).outerjoin(FabricIncharge).order_by(Process.name).all()
+    process_details = [
+        {
+            'id': pd.id,
+            'process_type': pd.process_type,
+            'process_id': pd.process_id,
+            'fabric_incharge_id': pd.fabric_incharge_id,
+            'process_name': pd.process_name,
+            'fabric_incharge_name': pd.fabric_incharge_name
+        }
+        for pd in process_details
+    ]
+
+    orders = GeneratedOrder.query.order_by(GeneratedOrder.created_at.desc()).all()
+    orders_list = []
+    for o in orders:
+        o_dict = {
+            'id': o.id,
+            'po_number': o.po_number,
+            'process_type': o.process_type,
+            'process': o.process,
+            'fabric_incharge': o.fabric_incharge,
+            'status': o.status,
+            'created_at': o.created_at,
+            'order_items': json.loads(o.order_items or '[]')
+        }
+        for item_index, item in enumerate(o_dict['order_items']):
+            process_data = order_item_process(o_dict, item)
+            item['item_index'] = item_index
+            item['process_type'] = process_data['process_type']
+            item['process'] = process_data['process']
+            item['fabric_incharge'] = process_data['fabric_incharge']
+        o_dict['item_count'] = len(o_dict['order_items'])
+        o_dict['total_qty'] = sum(float(item.get('order_qty', 0)) for item in o_dict['order_items'])
+        orders_list.append(o_dict)
+
+    report_filter_options = {
+        'po_number': sorted({o['po_number'] for o in orders_list if o.get('po_number')}),
+        'fabric': sorted({item.get('fabric_name') for o in orders_list for item in o['order_items'] if item.get('fabric_name')}),
+        'colour': sorted({colour for o in orders_list for item in o['order_items'] for colour in item.get('colour', []) if colour}),
+        'dia': sorted({dia for o in orders_list for item in o['order_items'] for dia in item.get('dia', []) if dia}),
+        'process_type': sorted({item.get('process_type') for o in orders_list for item in o['order_items'] if item.get('process_type')}),
+        'process': sorted({item.get('process') for o in orders_list for item in o['order_items'] if item.get('process')}),
+        'fabric_incharge': sorted({item.get('fabric_incharge') for o in orders_list for item in o['order_items'] if item.get('fabric_incharge')}),
+        'status': sorted({o['status'] for o in orders_list if o.get('status')}),
+    }
+
+    def report_item_matches(item):
+        if selected_report_filters['fabric'] and item.get('fabric_name') not in selected_report_filters['fabric']:
+            return False
+        if selected_report_filters['colour'] and not any(c in selected_report_filters['colour'] for c in item.get('colour', [])):
+            return False
+        if selected_report_filters['dia'] and not any(d in selected_report_filters['dia'] for d in item.get('dia', [])):
+            return False
+        if selected_report_filters['process_type'] and item.get('process_type') not in selected_report_filters['process_type']:
+            return False
+        if selected_report_filters['process'] and item.get('process') not in selected_report_filters['process']:
+            return False
+        if selected_report_filters['fabric_incharge'] and item.get('fabric_incharge') not in selected_report_filters['fabric_incharge']:
+            return False
+        return True
+
+    def order_matches_report_filters(order):
+        if selected_report_filters['po_number'] and order.get('po_number') not in selected_report_filters['po_number']:
+            return False
+        if selected_report_filters['status'] and order.get('status') not in selected_report_filters['status']:
+            return False
+
+        item_filters_active = any(selected_report_filters[key] for key in ('fabric', 'colour', 'dia', 'process_type', 'process', 'fabric_incharge'))
+        return not item_filters_active or any(report_item_matches(item) for item in order['order_items'])
+
+    filtered_orders = []
+    item_filters_active = any(selected_report_filters[key] for key in ('fabric', 'colour', 'dia', 'process_type', 'process', 'fabric_incharge'))
+    for order in orders_list:
+        if not order_matches_report_filters(order):
+            continue
+        if item_filters_active:
+            order = dict(order)
+            order['order_items'] = [item for item in order['order_items'] if report_item_matches(item)]
+            order['item_count'] = len(order['order_items'])
+            order['total_qty'] = sum(float(item.get('order_qty', 0)) for item in order['order_items'])
+        filtered_orders.append(order)
+    orders_list = filtered_orders
+
+    def rows_excluding(filter_key):
+        temp_filters = {k: v for k, v in selected_filters.items() if k != filter_key}
+        return build_requirement_rows(temp_filters)
+
+    all_fabrics = sorted({r['fabric_name'] for r in rows_excluding('fabric')})
+    all_uoms = sorted({r['uom'] for r in rows_excluding('uom') if r['uom']})
+    all_gsms = sorted({r['gsm'] for r in rows_excluding('gsm') if r['gsm']})
+    all_colours = sorted({colour for r in rows_excluding('colour') for colour in r.get('colour', [])})
+    all_dias = sorted({dia for r in rows_excluding('dia') for dia in r.get('dia', [])})
+
+    return render_template(
+        'fabric_orders.html',
+        title='Fabric Orders',
+        rows=rows,
+        selected_filters=selected_filters,
+        all_fabrics=all_fabrics,
+        all_uoms=all_uoms,
+        all_gsms=all_gsms,
+        all_colours=all_colours,
+        all_dias=all_dias,
+        frozen_orders=frozen_orders,
+        fabrics=fabrics,
+        incharges=incharges,
+        processes=processes,
+        process_details=process_details,
+        orders=orders_list,
+        report_filter_options=report_filter_options,
+        selected_report_filters=selected_report_filters,
+        selected_report_form_filters={f'report_{key}': value for key, value in selected_report_filters.items()},
+        tab=request.args.get('tab', 'custom'),
+        error=request.args.get('error'),
+        success=request.args.get('success'),
+    )
+
+
+@app.route('/fabric_orders/freeze', methods=['POST'])
+@login_required
+def fabric_orders_freeze():
+    selected_filters = {
+        'fabric': request.form.get('fabric', '').strip(),
+        'uom': request.form.get('uom', '').strip(),
+        'gsm': request.form.get('gsm', '').strip(),
+        'colour': request.form.get('colour', '').strip(),
+        'dia': request.form.get('dia', '').strip(),
+        'result': request.form.get('result', '').strip(),
+    }
+    
+    rows = build_requirement_rows(selected_filters)
+    frozen_orders = session.get('fabric_orders', [])
+    
+    selected_rows = [int(i) for i in request.form.getlist('selected_rows') if i.isdigit()]
+    
+    for row_idx, row in enumerate(rows):
+        if row_idx in selected_rows:
+            qty_str = request.form.get(f"order_qty_{row_idx}", "0")
+            try:
+                order_qty = float(qty_str)
+            except ValueError:
+                order_qty = 0.0
+                
+            frozen_row = {
+                'fabric_name': row['fabric_name'],
+                'uom': row['uom'],
+                'gsm': row['gsm'],
+                'colour': row['colour'],
+                'dia': row['dia'],
+                'order_qty': order_qty,
+                'min_order_qty': row['min_order_qty'],
+                'result_type': row['result_type'],
+            }
+            
+            exists = False
+            for f in frozen_orders:
+                if (
+                    f['fabric_name'] == frozen_row['fabric_name'] and
+                    f['uom'] == frozen_row['uom'] and
+                    f['gsm'] == frozen_row['gsm'] and
+                    f['colour'] == frozen_row['colour'] and
+                    f['dia'] == frozen_row['dia']
+                ):
+                    f['order_qty'] = frozen_row['order_qty']
+                    exists = True
+                    break
+            if not exists:
+                frozen_orders.append(frozen_row)
+                
+    session['fabric_orders'] = frozen_orders
+    return redirect('/fabric_orders?tab=custom&success=Successfully froze %d row(s).' % len(selected_rows))
+
+
+@app.route('/fabric_orders/generate', methods=['POST'])
+@login_required
+def fabric_orders_generate():
+    po_number = request.form.get('po_number', '').strip()
+    process_type = request.form.get('process_type', '').strip()
+    process = request.form.get('process', '').strip()
+    fabric_incharge = request.form.get('fabric_incharge', '').strip()
+    frozen_orders = session.get('fabric_orders', [])
+    
+    if not po_number or not process_type:
+        return redirect('/fabric_orders?tab=custom&error=PO Number and Process Type are required.')
+    if not frozen_orders:
+        return redirect('/fabric_orders?tab=custom&error=No frozen items to generate an order for.')
+    if GeneratedOrder.query.filter_by(po_number=po_number).first():
+        return redirect(f'/fabric_orders?tab=custom&error=PO Number {po_number} already exists.')
+    try:
+        order = GeneratedOrder(
+            po_number=po_number,
+            order_items=json.dumps(frozen_orders),
+            process_type=process_type,
+            process=process,
+            fabric_incharge=fabric_incharge,
+            status='Pending'
+        )
+        db.session.add(order)
+        db.session.commit()
+        session['fabric_orders'] = []
+        return redirect(f'/fabric_orders?tab=report&success=PO {po_number} generated successfully.')
+    except Exception as e:
+        return redirect(f'/fabric_orders?tab=custom&error={str(e)}')
+
+
+@app.route('/fabric_orders/manual/save', methods=['POST'])
+@permission_required('fabric_orders_manual_add')
+@login_required
+def fabric_orders_manual_save():
+    action = request.form.get('manual_action', '').strip()
+    fabric_ids = request.form.getlist('fabric_id[]')
+    colours = request.form.getlist('colour[]')
+    dias = request.form.getlist('dia[]')
+    quantities = request.form.getlist('quantity[]')
+    manual_items = []
+    for i in range(len(fabric_ids)):
+        fid = fabric_ids[i]; col = colours[i]; dia = dias[i]; qty_str = quantities[i]
+        if not fid or not qty_str:
+            continue
+        try:
+            qty = float(qty_str)
+        except ValueError:
+            continue
+        fab = Fabric.query.get(fid)
+        if not fab: continue
+        manual_items.append({
+            'fabric_name': fab.name,
+            'uom': fab.uom,
+            'gsm': fab.gsm,
+            'colour': [col] if col else [],
+            'dia': [dia] if dia else [],
+            'order_qty': qty,
+            'min_order_qty': 0.0,
+            'result_type': 'MANUAL',
+        })
+    if not manual_items:
+        return redirect('/fabric_orders?tab=manual&error=Please add at least one item with valid quantity.')
+    if action == 'generate_new':
+        po_number = request.form.get('po_number', '').strip()
+        process_type = request.form.get('process_type', '').strip()
+        process = request.form.get('process', '').strip()
+        fabric_incharge = request.form.get('fabric_incharge', '').strip()
+        if not po_number or not process_type:
+            return redirect('/fabric_orders?tab=manual&error=PO Number and Process Type are required.')
+        if GeneratedOrder.query.filter_by(po_number=po_number).first():
+            return redirect(f'/fabric_orders?tab=manual&error=PO Number {po_number} already exists.')
+        try:
+            order = GeneratedOrder(
+                po_number=po_number,
+                order_items=json.dumps(manual_items),
+                process_type=process_type,
+                process=process,
+                fabric_incharge=fabric_incharge,
+                status='Pending'
+            )
+            db.session.add(order)
+            db.session.commit()
+            return redirect(f'/fabric_orders?tab=report&success=New PO {po_number} generated successfully.')
+        except Exception as e:
+            return redirect(f'/fabric_orders?tab=manual&error={str(e)}')
+    elif action == 'add_to_old':
+        po_id = request.form.get('old_po_id', '').strip()
+        if not po_id:
+            return redirect('/fabric_orders?tab=manual&error=Please select an existing PO.')
+        po = GeneratedOrder.query.get(po_id)
+        if not po:
+            return redirect('/fabric_orders?tab=manual&error=PO not found.')
+        old_items = json.loads(po.order_items or '[]')
+        for new_item in manual_items:
+            found = False
+            for old_item in old_items:
+                if (
+                    old_item['fabric_name'] == new_item['fabric_name'] and
+                    old_item['uom'] == new_item['uom'] and
+                    old_item['gsm'] == new_item['gsm'] and
+                    old_item['colour'] == new_item['colour'] and
+                    old_item['dia'] == new_item['dia']
+                ):
+                    old_item['order_qty'] = float(old_item.get('order_qty', 0)) + new_item['order_qty']
+                    found = True
+                    break
+            if not found:
+                old_items.append(new_item)
+        po.order_items = json.dumps(old_items)
+        db.session.commit()
+        return redirect(f'/fabric_orders?tab=report&success=Items successfully appended to PO {po.po_number}.')
+    return redirect('/fabric_orders?tab=manual')
+
+
+@app.route('/fabric_orders/update_status', methods=['POST'])
+@login_required
+def fabric_orders_update_status():
+    po_id = request.form.get('id', '').strip()
+    status = request.form.get('status', '').strip()
+    if not po_id or not status:
+        return redirect('/fabric_orders?tab=report&error=Invalid status update parameters.')
+    po = GeneratedOrder.query.get(po_id)
+    if po:
+        po.status = status
+        db.session.commit()
+    return redirect('/fabric_orders?tab=report&success=Status updated successfully.')
+
+
+@app.route('/fabric_orders/edit', methods=['POST'])
+@login_required
+def fabric_orders_edit():
+    po_id = request.form.get('id', '').strip()
+    po_number = request.form.get('po_number', '').strip()
+    process_type = request.form.get('process_type', '').strip()
+    process = request.form.get('process', '').strip()
+    fabric_incharge = request.form.get('fabric_incharge', '').strip()
+    status = request.form.get('status', '').strip()
+    item_indices = request.form.getlist('item_index[]')
+    quantities = request.form.getlist('item_qty[]')
+    if not po_id or not po_number:
+        return redirect('/fabric_orders?tab=report&error=PO ID and PO Number are required.')
+    po = GeneratedOrder.query.get(po_id)
+    if not po:
+        return redirect('/fabric_orders?tab=report&error=PO not found.')
+    items = json.loads(po.order_items or '[]')
+    for idx_str, qty_str in zip(item_indices, quantities):
+        try:
+            idx = int(idx_str); qty = float(qty_str)
+            if 0 <= idx < len(items):
+                items[idx]['order_qty'] = qty
+        except (ValueError, TypeError):
+            continue
+    items = [item for item in items if float(item.get('order_qty', 0)) > 0]
+    if not items:
+        db.session.delete(po); db.session.commit()
+        return redirect('/fabric_orders?tab=report&success=PO deleted because all items had 0 quantity.')
+    po.po_number = po_number
+    po.process_type = process_type
+    po.process = process
+    po.fabric_incharge = fabric_incharge
+    po.status = status
+    po.order_items = json.dumps(items)
+    db.session.commit()
+    return redirect('/fabric_orders?tab=report&success=PO details and quantities updated successfully.')
+
+
+@app.route('/fabric_orders/delete/<int:order_id>', methods=['POST'])
+@login_required
+def fabric_orders_delete(order_id):
+    po = GeneratedOrder.query.get(order_id)
+    if po:
+        db.session.delete(po); db.session.commit()
+    return redirect('/fabric_orders?tab=report&success=PO deleted successfully.')
+
+
+@app.route('/fabric_orders/process_update/<int:order_id>/<int:item_index>', methods=['GET', 'POST'])
+@login_required
+def fabric_orders_process_update(order_id, item_index):
+    order = GeneratedOrder.query.get(order_id)
+    if not order:
+        return redirect('/fabric_orders?tab=report&error=PO not found.')
+    items = json.loads(order.order_items or '[]')
+    if item_index < 0 or item_index >= len(items):
+        return redirect('/fabric_orders?tab=report&error=Order item not found.')
+    item = items[item_index]
+    current_qty = float(item.get('order_qty') or 0)
+    order_dict = {'po_number': order.po_number, 'process_type': order.process_type, 'process': order.process, 'fabric_incharge': order.fabric_incharge}
+    process_data = order_item_process(order_dict, item)
+    incharges = [{'id': i.id, 'name': i.name} for i in FabricIncharge.query.order_by(FabricIncharge.name).all()]
+    processes = [{'id': p.id, 'name': p.name} for p in Process.query.order_by(Process.name).all()]
+    process_details = db.session.query(
+        ProcessDetails.id,
+        ProcessDetails.process_type,
+        ProcessDetails.process_id,
+        ProcessDetails.fabric_incharge_id,
+        Process.name.label('process_name'),
+        FabricIncharge.name.label('fabric_incharge_name')
+    ).outerjoin(Process).outerjoin(FabricIncharge).order_by(Process.name).all()
+    process_details = [{
+        'id': pd.id,
+        'process_type': pd.process_type,
+        'process_id': pd.process_id,
+        'fabric_incharge_id': pd.fabric_incharge_id,
+        'process_name': pd.process_name,
+        'fabric_incharge_name': pd.fabric_incharge_name
+    } for pd in process_details]
+    if request.method == 'POST':
+        move_qty_raw = request.form.get('move_qty', '').strip()
+        process_type = request.form.get('process_type', '').strip()
+        process = request.form.get('process', '').strip()
+        fabric_incharge = request.form.get('fabric_incharge', '').strip()
+        try:
+            move_qty = float(move_qty_raw)
+        except ValueError:
+            move_qty = 0
+        if move_qty <= 0 or move_qty > current_qty:
+            return redirect(f'/fabric_orders/process_update/{order_id}/{item_index}?error=Split quantity must be greater than 0 and not more than current quantity.')
+        if not process_type:
+            return redirect(f'/fabric_orders/process_update/{order_id}/{item_index}?error=Process Type is required.')
+        if move_qty == current_qty:
+            item['process_type'] = process_type
+            item['process'] = process
+            item['fabric_incharge'] = fabric_incharge
+        else:
+            item['order_qty'] = current_qty - move_qty
+            moved_item = dict(item)
+            moved_item['order_qty'] = move_qty
+            moved_item['process_type'] = process_type
+            moved_item['process'] = process
+            moved_item['fabric_incharge'] = fabric_incharge
+            moved_item['split_from'] = item_index
+            items.append(moved_item)
+        order.order_items = json.dumps(items)
+        db.session.commit()
+        return redirect('/fabric_orders?tab=report&success=Process movement updated successfully.')
+    item = dict(item)
+    item.update(process_data)
+    return render_template(
+        'fabric_order_process_update.html',
+        title='Process Update',
+        order={'id': order.id, 'po_number': order.po_number},
+        item=item,
+        item_index=item_index,
+        current_qty=current_qty,
+        process_details=process_details,
+        processes=processes,
+        incharges=incharges,
+        error=request.args.get('error'),
+    )
+
+
+@app.route('/fabric_orders_report')
+@login_required
+def fabric_orders_report():
+    return redirect('/fabric_orders?tab=report')
+
+
+@app.route('/fabric_orders/report/export')
+@login_required
+def fabric_orders_report_export():
+    selected_report_filters = {
+        'po_number': request_list_arg('report_po_number'),
+        'fabric': request_list_arg('report_fabric'),
+        'colour': request_list_arg('report_colour'),
+        'dia': request_list_arg('report_dia'),
+        'process_type': request_list_arg('report_process_type'),
+        'process': request_list_arg('report_process'),
+        'fabric_incharge': request_list_arg('report_fabric_incharge'),
+        'status': request_list_arg('report_status'),
+    }
+    orders = GeneratedOrder.query.order_by(GeneratedOrder.created_at.desc()).all()
+    export_rows = []
+    for order in orders:
+        order_dict = {'po_number': order.po_number, 'process_type': order.process_type, 'process': order.process, 'fabric_incharge': order.fabric_incharge, 'status': order.status}
+        items = json.loads(order.order_items or '[]')
+        if selected_report_filters['po_number'] and order.po_number not in selected_report_filters['po_number']:
+            continue
+        if selected_report_filters['process_type'] and order.process_type not in selected_report_filters['process_type']:
+            continue
+        if selected_report_filters['process'] and order.process not in selected_report_filters['process']:
+            continue
+        if selected_report_filters['fabric_incharge'] and order.fabric_incharge not in selected_report_filters['fabric_incharge']:
+            continue
+        if selected_report_filters['status'] and order.status not in selected_report_filters['status']:
+            continue
+        for item in items:
+            item.update(order_item_process(order_dict, item))
+            if selected_report_filters['fabric'] and item.get('fabric_name') not in selected_report_filters['fabric']:
+                continue
+            if selected_report_filters['colour'] and not any(c in selected_report_filters['colour'] for c in item.get('colour', [])):
+                continue
+            if selected_report_filters['dia'] and not any(d in selected_report_filters['dia'] for d in item.get('dia', [])):
+                continue
+            if selected_report_filters['process_type'] and item.get('process_type') not in selected_report_filters['process_type']:
+                continue
+            if selected_report_filters['process'] and item.get('process') not in selected_report_filters['process']:
+                continue
+            if selected_report_filters['fabric_incharge'] and item.get('fabric_incharge') not in selected_report_filters['fabric_incharge']:
+                continue
+            export_rows.append([
+                order.po_number or '',
+                item.get('fabric_name', ''),
+                item.get('uom', ''),
+                item.get('gsm', ''),
+                ', '.join(item.get('colour', [])),
+                ', '.join(item.get('dia', [])),
+                item.get('order_qty', ''),
+                item.get('process_type', ''),
+                item.get('process', ''),
+                item.get('fabric_incharge', ''),
+                order.status or '',
+                order.created_at.isoformat() if order.created_at else '',
+            ])
+    wb = Workbook(); ws = wb.active; ws.title = 'Fabric Orders'
+    ws.append(['PO No','Fabric','UOM','GSM','Colour','DIA','Order Qty','Process Type','Process','Fabric Incharge','Status','Created At'])
+    for row in export_rows: ws.append(row)
+    for column_cells in ws.columns:
+        max_length = max(len(str(cell.value or '')) for cell in column_cells)
+        ws.column_dimensions[column_cells[0].column_letter].width = min(max_length + 2, 32)
+    file_stream = BytesIO(); wb.save(file_stream); file_stream.seek(0)
+    return send_file(file_stream, as_attachment=True, download_name='fabric_orders_report.xlsx', mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+
+@app.route('/process_master')
+@login_required
+def process_master():
+    u = current_user()
+    if not u.has('process_view'): return 'Access denied.', 403
+    error = request.args.get('error')
+    success = request.args.get('success')
+    incharges = [{'id': i.id, 'name': i.name} for i in FabricIncharge.query.order_by(FabricIncharge.name).all()]
+    processes = [{'id': p.id, 'name': p.name} for p in Process.query.order_by(Process.name).all()]
+    details = db.session.query(ProcessDetails.id, ProcessDetails.process_type, ProcessDetails.process_id, ProcessDetails.fabric_incharge_id, Process.name.label('process_name'), FabricIncharge.name.label('fabric_incharge_name')).outerjoin(Process).outerjoin(FabricIncharge).order_by(ProcessDetails.id.desc()).all()
+    details = [{
+        'id': d.id,
+        'process_type': d.process_type,
+        'process_id': d.process_id,
+        'fabric_incharge_id': d.fabric_incharge_id,
+        'process_name': d.process_name,
+        'fabric_incharge_name': d.fabric_incharge_name
+    } for d in details]
+    return render_template('process_master.html', title='Process Master', incharges=incharges, processes=processes, details=details, error=error, success=success)
+
+
+@app.route('/process_master/fabric_incharge/save', methods=['POST'])
+@login_required
+def fabric_incharge_save():
+    name = request.form.get('name', '').strip()
+    edit_id = request.form.get('id', '').strip()
+    if not name:
+        return redirect('/process_master?error=Name is required')
+    if edit_id:
+        incharge = FabricIncharge.query.get(edit_id)
+        if incharge:
+            incharge.name = name
+            msg = 'Fabric Incharge updated successfully'
+        else:
+            return redirect('/process_master?error=Fabric Incharge not found')
+    else:
+        incharge = FabricIncharge(name=name)
+        db.session.add(incharge)
+        msg = 'Fabric Incharge added successfully'
+    try:
+        db.session.commit()
+        return redirect(f'/process_master?success={msg}')
+    except Exception as e:
+        return redirect('/process_master?error=Fabric Incharge name already exists')
+
+
+@app.route('/process_master/fabric_incharge/delete/<int:incharge_id>', methods=['POST'])
+@login_required
+def fabric_incharge_delete(incharge_id):
+    incharge = FabricIncharge.query.get(incharge_id)
+    if incharge:
+        db.session.delete(incharge)
+        db.session.commit()
+    return redirect('/process_master?success=Fabric Incharge deleted successfully')
+
+
+@app.route('/process_master/process/save', methods=['POST'])
+@login_required
+def process_save():
+    name = request.form.get('name', '').strip()
+    edit_id = request.form.get('id', '').strip()
+    if not name:
+        return redirect('/process_master?error=Process Name is required')
+    if edit_id:
+        process = Process.query.get(edit_id)
+        if process:
+            process.name = name
+            msg = 'Process updated successfully'
+        else:
+            return redirect('/process_master?error=Process not found')
+    else:
+        process = Process(name=name)
+        db.session.add(process)
+        msg = 'Process added successfully'
+    try:
+        db.session.commit()
+        return redirect(f'/process_master?success={msg}')
+    except Exception as e:
+        return redirect('/process_master?error=Process name already exists')
+
+
+@app.route('/process_master/process/delete/<int:process_id>', methods=['POST'])
+@login_required
+def process_delete(process_id):
+    process = Process.query.get(process_id)
+    if process:
+        db.session.delete(process)
+        db.session.commit()
+    return redirect('/process_master?success=Process deleted successfully')
+
+
+@app.route('/process_master/process_details/save', methods=['POST'])
+@login_required
+def process_details_save():
+    process_type = request.form.get('process_type', '').strip()
+    process_id = request.form.get('process_id', '').strip()
+    fabric_incharge_id = request.form.get('fabric_incharge_id', '').strip()
+    edit_id = request.form.get('id', '').strip()
+    if not process_type or not process_id or not fabric_incharge_id:
+        return redirect('/process_master?error=All fields are required')
+    if edit_id:
+        detail = ProcessDetails.query.get(edit_id)
+        if detail:
+            detail.process_type = process_type
+            detail.process_id = process_id
+            detail.fabric_incharge_id = fabric_incharge_id
+            msg = 'Process Details updated successfully'
+        else:
+            return redirect('/process_master?error=Process Details not found')
+    else:
+        existing = ProcessDetails.query.filter_by(process_type=process_type, process_id=process_id, fabric_incharge_id=fabric_incharge_id).first()
+        if existing:
+            return redirect('/process_master?error=This process combination already exists')
+        detail = ProcessDetails(process_type=process_type, process_id=process_id, fabric_incharge_id=fabric_incharge_id)
+        db.session.add(detail)
+        msg = 'Process Details added successfully'
+    db.session.commit()
+    return redirect(f'/process_master?success={msg}')
+
+
+@app.route('/process_master/process_details/delete/<int:details_id>', methods=['POST'])
+@login_required
+def process_details_delete(details_id):
+    detail = ProcessDetails.query.get(details_id)
+    if detail:
+        db.session.delete(detail)
+        db.session.commit()
+    return redirect('/process_master?success=Process Details deleted successfully')
 
 
 # ---------------- PRODUCT ----------------
@@ -822,7 +2247,7 @@ def _safe_migrate():
         conn.execute(text("ALTER TABLE programs ADD COLUMN IF NOT EXISTS completed_date VARCHAR(20) DEFAULT ''"))
         conn.execute(text("CREATE SEQUENCE IF NOT EXISTS program_no_seq START 1"))
         conn.execute(text(
-            "SELECT setval('program_no_seq', COALESCE(MAX(NULLIF(regexp_replace(program_no, '\\D', '', 'g'), '')::integer), 0), true)"
+            "SELECT setval('program_no_seq', COALESCE(MAX(NULLIF(regexp_replace(program_no, '\\D', '', 'g'), '')::integer), 1), true)"
             " FROM programs"
         ))
 

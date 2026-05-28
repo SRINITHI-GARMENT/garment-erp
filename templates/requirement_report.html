@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{ title }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<div class="container">
+    {% include 'sidebar.html' %}
+
+    <div class="main">
+        <h1>{{ title }}</h1>
+
+        {% set filter_fields = [
+            {'key': 'fabric', 'label': 'Fabric'},
+            {'key': 'uom', 'label': 'UOM'},
+            {'key': 'gsm', 'label': 'GSM'},
+            {'key': 'colour', 'label': 'Colour'},
+            {'key': 'dia', 'label': 'DIA'},
+            {'key': 'result', 'label': 'Result'}
+        ] %}
+        {% set filter_action = url_for('stock_entries', entry_type='requirement') %}
+        {% set clear_url = url_for('stock_entries', entry_type='requirement') %}
+        {% set export_url = url_for('export_stock', entry_type='requirement', **request.args) %}
+        {% set hidden_fields = {} %}
+        {% include '_advanced_filters.html' %}
+
+        <div class="summary-grid">
+            <div class="summary-card">Base Stock Total: {{ base_total or 0 }}</div>
+            <div class="summary-card">Actual Stock Total: {{ actual_stock_total or 0 }}</div>
+            <div class="summary-card">WIP Total: {{ wip_total or 0 }}</div>
+            <div class="summary-card">Requirement Total: {{ computed_requirement or 0 }}</div>
+        </div>
+
+        <div class="result-summary">
+            <strong>Result:</strong>
+            Required: {{ result_counts.REQUIRED }} ({{ result_totals.required_qty }}),
+            Excess: {{ result_counts.EXCESS }} ({{ result_totals.excess_qty }}),
+            Balanced: {{ result_counts.BALANCED }}
+        </div>
+
+        <table class="data-table">
+            <tr>
+                <th>#</th>
+                <th>Fabric</th>
+                <th>UOM</th>
+                <th>GSM</th>
+                <th>Colour</th>
+                <th>DIA</th>
+                <th>Actual Stock</th>
+                <th>WIP</th>
+                <th>Base Stock</th>
+                <th>Requirement</th>
+                <th>Result</th>
+            </tr>
+            {% for row in rows %}
+            <tr data-colour="{{ row.colour | join(', ') }}" data-dia="{{ row.dia | join(', ') }}">
+                <td>{{ loop.index }}</td>
+                <td>{{ row.fabric_name }}</td>
+                <td>{{ row.uom }}</td>
+                <td>{{ row.gsm }}</td>
+                <td>{{ row.colour | join(', ') }}</td>
+                <td>{{ row.dia | join(', ') }}</td>
+                <td>{{ row.actual_stock }}</td>
+                <td>{{ row.wip }}</td>
+                <td>{{ row.base_stock }}</td>
+                <td>{{ row.requirement_detail }}</td>
+                <td>{{ row.result_type }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+
+    </div>
+</div>
+
+<script>
+    const comboPairs = [
+        {% for row in rows %}
+            {% if row.colour and row.dia %}
+                {"colour": "{{ row.colour[0] }}", "dia": "{{ row.dia[0] }}"},
+            {% elif row.colour and not row.dia %}
+                {"colour": "{{ row.colour[0] }}", "dia": ""},
+            {% elif row.dia and not row.colour %}
+                {"colour": "", "dia": "{{ row.dia[0] }}"},
+            {% endif %}
+        {% endfor %}
+    ];
+
+    const colourToDias = {};
+    const diaToColours = {};
+    comboPairs.forEach(pair => {
+        if (pair.colour) {
+            colourToDias[pair.colour] = colourToDias[pair.colour] || new Set();
+            if (pair.dia) colourToDias[pair.colour].add(pair.dia);
+        }
+        if (pair.dia) {
+            diaToColours[pair.dia] = diaToColours[pair.dia] || new Set();
+            if (pair.colour) diaToColours[pair.dia].add(pair.colour);
+        }
+    });
+
+    const searchInputs = document.querySelectorAll('.filter-search');
+    const hiddenSelects = document.querySelectorAll('.filter-select.hidden');
+    const dropdowns = document.querySelectorAll('.filter-dropdown');
+
+    function syncDropdownFromSelect(key) {
+        const select = document.querySelector(`.filter-select[data-key="${key}"]`);
+        const checkboxes = document.querySelectorAll(`.filter-dropdown[data-key="${key}"] .filter-option input[type="checkbox"]`);
+        if (!select) return;
+        const selectedValues = new Set(Array.from(select.selectedOptions).map(o => o.value));
+        checkboxes.forEach(cb => {
+            cb.checked = selectedValues.has(cb.value);
+        });
+        updateDisplayInput(key, selectedValues);
+    }
+
+    function syncSelectFromDropdown(key) {
+        const select = document.querySelector(`.filter-select[data-key="${key}"]`);
+        const checkboxes = document.querySelectorAll(`.filter-dropdown[data-key="${key}"] .filter-option input[type="checkbox"]`);
+        if (!select) return;
+        const selectedValues = [];
+        Array.from(select.options).forEach(option => {
+            option.selected = false;
+        });
+        checkboxes.forEach(cb => {
+            if (cb.checked) {
+                const option = Array.from(select.options).find(o => o.value === cb.value);
+                if (option) {
+                    option.selected = true;
+                    selectedValues.push(cb.value);
+                }
+            }
+        });
+        updateDisplayInput(key, new Set(selectedValues));
+    }
+
+    function updateDisplayInput(key, selectedValues) {
+        const input = document.querySelector(`.filter-control[data-key="${key}"] .filter-search`);
+        if (!input) return;
+        input.value = selectedValues && selectedValues.size > 0 ? Array.from(selectedValues).join(', ') : '';
+    }
+
+    function filterDropdown(searchInput) {
+        const key = searchInput.dataset.target;
+        const query = searchInput.value.toLowerCase();
+        const dropdown = document.querySelector(`.filter-dropdown[data-key="${key}"]`);
+        if (!dropdown) return;
+        Array.from(dropdown.querySelectorAll('.filter-option')).forEach(item => {
+            const labelText = item.textContent.toLowerCase();
+            item.style.display = query && !labelText.includes(query) ? 'none' : 'block';
+        });
+    }
+
+    function closeAllDropdowns() {
+        document.querySelectorAll('.filter-control.open').forEach(control => {
+            control.classList.remove('open');
+        });
+    }
+
+    function openDropdown(control) {
+        closeAllDropdowns();
+        control.classList.add('open');
+    }
+
+    searchInputs.forEach(input => {
+        input.addEventListener('focus', () => {
+            const control = input.closest('.filter-control');
+            if (control) openDropdown(control);
+        });
+        input.addEventListener('input', () => filterDropdown(input));
+    });
+
+    dropdowns.forEach(dropdown => {
+        dropdown.addEventListener('change', event => {
+            const checkbox = event.target;
+            if (checkbox && checkbox.type === 'checkbox') {
+                const control = checkbox.closest('.filter-control');
+                if (control) {
+                    syncSelectFromDropdown(control.dataset.key);
+                    if (control.dataset.key === 'colour' || control.dataset.key === 'dia') {
+                        updateDependentFilters();
+                    }
+                }
+            }
+        });
+    });
+
+    function updateDependentFilters() {
+        const selectedColours = Array.from(document.querySelectorAll('.filter-dropdown[data-key="colour"] .filter-option input[type="checkbox"]:checked')).map(i => i.value);
+        const selectedDias = Array.from(document.querySelectorAll('.filter-dropdown[data-key="dia"] .filter-option input[type="checkbox"]:checked')).map(i => i.value);
+        const colourOptions = document.querySelectorAll('.filter-dropdown[data-key="colour"] .filter-option');
+        const diaOptions = document.querySelectorAll('.filter-dropdown[data-key="dia"] .filter-option');
+
+        if (selectedDias.length > 0) {
+            const validColours = new Set();
+            selectedDias.forEach(dia => {
+                const values = diaToColours[dia];
+                if (values) values.forEach(c => validColours.add(c));
+            });
+            colourOptions.forEach(label => {
+                const cb = label.querySelector('input');
+                label.style.opacity = validColours.size > 0 && !validColours.has(cb.value) ? '0.45' : '1';
+                cb.disabled = validColours.size > 0 && !validColours.has(cb.value);
+            });
+        } else {
+            colourOptions.forEach(label => {
+                const cb = label.querySelector('input');
+                cb.disabled = false;
+                label.style.opacity = '1';
+            });
+        }
+
+        if (selectedColours.length > 0) {
+            const validDias = new Set();
+            selectedColours.forEach(colour => {
+                const values = colourToDias[colour];
+                if (values) values.forEach(d => validDias.add(d));
+            });
+            diaOptions.forEach(label => {
+                const cb = label.querySelector('input');
+                label.style.opacity = validDias.size > 0 && !validDias.has(cb.value) ? '0.45' : '1';
+                cb.disabled = validDias.size > 0 && !validDias.has(cb.value);
+            });
+        } else {
+            diaOptions.forEach(label => {
+                const cb = label.querySelector('input');
+                cb.disabled = false;
+                label.style.opacity = '1';
+            });
+        }
+    }
+
+    document.addEventListener('click', event => {
+        if (!event.target.closest('.filter-control')) {
+            closeAllDropdowns();
+        }
+    });
+
+    document.addEventListener('DOMContentLoaded', () => {
+        hiddenSelects.forEach(select => {
+            syncDropdownFromSelect(select.dataset.key);
+        });
+        searchInputs.forEach(input => {
+            filterDropdown(input);
+        });
+        updateDependentFilters();
+    });
+</script>
+</body>
+</html>

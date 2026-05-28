@@ -10,25 +10,7 @@
 <div class="container">
 
     <!-- SIDEBAR -->
-    <div class="sidebar">
-        <h2>SRINITHI GARMENT</h2>
-
-        <ul>
-            <li><a href="/dashboard">🏠 Dashboard</a></li>
-            <li class="menu-title">MASTER</li>
-            <li><a href="/colour">🎨 Colour Master</a></li>
-            <li><a href="/size">📏 Size Master</a></li>
-            <li><a href="/fabric">🧵 Fabric Master</a></li>
-            <li><a href="/product">📦 Product Master</a></li>
-            <li><a href="/supplier">🏭 Supplier Master</a></li>
-            <li><a href="/users">👥 User Master</a></li>
-            <li class="menu-title">PROGRAM</li>
-            <li><a href="/program">📋 Program Entry</a></li>
-            <li><a href="/overall_programs">📊 Overall Programs</a></li>
-            <li class="menu-title">ACCOUNT</li>
-            <li><a href="/logout">🚪 Logout</a></li>
-        </ul>
-    </div>
+    {% include 'sidebar.html' %}
 
     <!-- MAIN CONTENT -->
     <div class="main">
@@ -42,7 +24,7 @@
                     <input type="text" name="size" placeholder="Enter size (S, M, L, XL)" required>
                 </div>
 
-                <button type="submit">Save Size</button>
+                <button type="submit" class="btn edit">Save Size</button>
             </form>
         </div>
 
@@ -50,7 +32,7 @@
         <div style="margin-top:20px;">
             <form method="GET">
                 <input type="text" name="search" placeholder="Search size">
-                <button type="submit">Search</button>
+                <button type="submit" class="btn edit">Search</button>
             </form>
         </div>
 
