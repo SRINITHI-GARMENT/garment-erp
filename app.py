@@ -1273,6 +1273,7 @@ def fabric_orders():
 
     filterable_selected_filters = request_filter_values(['fabric', 'uom', 'gsm', 'colour', 'dia', 'result'])
     all_rows = _build_requirement_rows_raw()
+    all_results = sorted({r['result_type'] for r in all_rows if r.get('result_type')})
     rows = build_requirement_rows(filterable_selected_filters)
     frozen_orders = session.get('fabric_orders', [])
     frozen_map = {
@@ -1418,6 +1419,7 @@ def fabric_orders():
         all_gsms=all_gsms,
         all_colours=all_colours,
         all_dias=all_dias,
+        all_results=all_results,
         frozen_orders=frozen_orders,
         fabrics=fabrics,
         incharges=incharges,

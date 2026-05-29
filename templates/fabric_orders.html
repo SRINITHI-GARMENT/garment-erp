@@ -228,27 +228,57 @@
                 <div class="filter-grid">
                     <div>
                         <label>Fabric</label>
-                        <input type="search" name="fabric" value="{{ selected_filters.fabric }}" placeholder="Search fabrics...">
+                        <input type="search" name="fabric" list="fabric-options" value="{{ selected_filters.fabric }}" placeholder="Search fabrics...">
+                        <datalist id="fabric-options">
+                            {% for fabric in all_fabrics %}
+                            <option value="{{ fabric }}"></option>
+                            {% endfor %}
+                        </datalist>
                     </div>
                     <div>
                         <label>UOM</label>
-                        <input type="search" name="uom" value="{{ selected_filters.uom }}" placeholder="Search UOM...">
+                        <input type="search" name="uom" list="uom-options" value="{{ selected_filters.uom }}" placeholder="Search UOM...">
+                        <datalist id="uom-options">
+                            {% for uom in all_uoms %}
+                            <option value="{{ uom }}"></option>
+                            {% endfor %}
+                        </datalist>
                     </div>
                     <div>
                         <label>GSM</label>
-                        <input type="search" name="gsm" value="{{ selected_filters.gsm }}" placeholder="Search GSM...">
+                        <input type="search" name="gsm" list="gsm-options" value="{{ selected_filters.gsm }}" placeholder="Search GSM...">
+                        <datalist id="gsm-options">
+                            {% for gsm in all_gsms %}
+                            <option value="{{ gsm }}"></option>
+                            {% endfor %}
+                        </datalist>
                     </div>
                     <div>
                         <label>Colour</label>
-                        <input type="search" name="colour" value="{{ selected_filters.colour }}" placeholder="Search colour...">
+                        <input type="search" name="colour" list="colour-options" value="{{ selected_filters.colour }}" placeholder="Search colour...">
+                        <datalist id="colour-options">
+                            {% for colour in all_colours %}
+                            <option value="{{ colour }}"></option>
+                            {% endfor %}
+                        </datalist>
                     </div>
                     <div>
                         <label>DIA</label>
-                        <input type="search" name="dia" value="{{ selected_filters.dia }}" placeholder="Search DIA...">
+                        <input type="search" name="dia" list="dia-options" value="{{ selected_filters.dia }}" placeholder="Search DIA...">
+                        <datalist id="dia-options">
+                            {% for dia in all_dias %}
+                            <option value="{{ dia }}"></option>
+                            {% endfor %}
+                        </datalist>
                     </div>
                     <div>
                         <label>Result</label>
-                        <input type="search" name="result" value="{{ selected_filters.result }}" placeholder="Search result...">
+                        <input type="search" name="result" list="result-options" value="{{ selected_filters.result }}" placeholder="Search result...">
+                        <datalist id="result-options">
+                            {% for result in all_results %}
+                            <option value="{{ result }}"></option>
+                            {% endfor %}
+                        </datalist>
                     </div>
                 </div>
                 <button type="submit" class="btn edit">Apply Filters</button>
