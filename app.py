@@ -678,6 +678,11 @@ def _build_requirement_rows_raw():
                     + rows_dict[key]['wip']
                     - rows_dict[key]['base_stock']
                 )
+                rows_dict[key]['result_type'] = (
+                    'EXCESS' if rows_dict[key]['requirement_detail'] > 0
+                    else 'REQUIRED' if rows_dict[key]['requirement_detail'] < 0
+                    else 'BALANCED'
+                )
 
     return list(rows_dict.values())
 
