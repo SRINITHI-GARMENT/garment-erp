@@ -1257,14 +1257,7 @@ def fabric_orders():
     u = current_user()
     if not u.has('fabric_orders_view'):
         return "Access denied.", 403
-    selected_filters = {
-        'fabric': request.args.get('fabric', '').strip(),
-        'uom': request.args.get('uom', '').strip(),
-        'gsm': request.args.get('gsm', '').strip(),
-        'colour': request.args.get('colour', '').strip(),
-        'dia': request.args.get('dia', '').strip(),
-        'result': request.args.get('result', '').strip(),
-    }
+    selected_filters = request_filter_values(['fabric', 'uom', 'gsm', 'colour', 'dia', 'result'])
     selected_report_filters = {
         'po_number': request_list_arg('report_po_number'),
         'fabric': request_list_arg('report_fabric'),
@@ -1276,7 +1269,7 @@ def fabric_orders():
         'status': request_list_arg('report_status'),
     }
 
-    filterable_selected_filters = request_filter_values(['fabric', 'uom', 'gsm', 'colour', 'dia', 'result'])
+    filterable_selected_filters = selected_filters
     all_rows = _build_requirement_rows_raw()
     all_results = sorted({r['result_type'] for r in all_rows if r.get('result_type')})
     rows = build_requirement_rows(filterable_selected_filters)
@@ -1413,6 +1406,14 @@ def fabric_orders():
     all_gsms = sorted({r['gsm'] for r in rows_excluding('gsm') if r['gsm']})
     all_colours = sorted({colour for r in rows_excluding('colour') for colour in r.get('colour', [])})
     all_dias = sorted({dia for r in rows_excluding('dia') for dia in r.get('dia', [])})
+    filter_options = {
+        'fabric': all_fabrics,
+        'uom': all_uoms,
+        'gsm': all_gsms,
+        'colour': all_colours,
+        'dia': all_dias,
+        'result': all_results,
+    }
 
     return render_template(
         'fabric_orders.html',
@@ -1425,6 +1426,7 @@ def fabric_orders():
         all_colours=all_colours,
         all_dias=all_dias,
         all_results=all_results,
+        filter_options=filter_options,
         frozen_orders=frozen_orders,
         fabrics=fabrics,
         incharges=incharges,

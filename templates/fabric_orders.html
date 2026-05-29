@@ -222,68 +222,19 @@
 
         <!-- TAB 1: CUSTOM ORDER -->
         <div id="custom-tab" class="tab-content {% if tab == 'custom' %}active{% endif %}">
-            <!-- Filter Options Form -->
-            <form method="GET" action="/fabric_orders" class="stock-form" style="margin-bottom: 20px;">
-                <input type="hidden" name="tab" value="custom">
-                <div class="filter-grid">
-                    <div>
-                        <label>Fabric</label>
-                        <input type="search" name="fabric" list="fabric-options" value="{{ selected_filters.fabric }}" placeholder="Search fabrics...">
-                        <datalist id="fabric-options">
-                            {% for fabric in all_fabrics %}
-                            <option value="{{ fabric }}"></option>
-                            {% endfor %}
-                        </datalist>
-                    </div>
-                    <div>
-                        <label>UOM</label>
-                        <input type="search" name="uom" list="uom-options" value="{{ selected_filters.uom }}" placeholder="Search UOM...">
-                        <datalist id="uom-options">
-                            {% for uom in all_uoms %}
-                            <option value="{{ uom }}"></option>
-                            {% endfor %}
-                        </datalist>
-                    </div>
-                    <div>
-                        <label>GSM</label>
-                        <input type="search" name="gsm" list="gsm-options" value="{{ selected_filters.gsm }}" placeholder="Search GSM...">
-                        <datalist id="gsm-options">
-                            {% for gsm in all_gsms %}
-                            <option value="{{ gsm }}"></option>
-                            {% endfor %}
-                        </datalist>
-                    </div>
-                    <div>
-                        <label>Colour</label>
-                        <input type="search" name="colour" list="colour-options" value="{{ selected_filters.colour }}" placeholder="Search colour...">
-                        <datalist id="colour-options">
-                            {% for colour in all_colours %}
-                            <option value="{{ colour }}"></option>
-                            {% endfor %}
-                        </datalist>
-                    </div>
-                    <div>
-                        <label>DIA</label>
-                        <input type="search" name="dia" list="dia-options" value="{{ selected_filters.dia }}" placeholder="Search DIA...">
-                        <datalist id="dia-options">
-                            {% for dia in all_dias %}
-                            <option value="{{ dia }}"></option>
-                            {% endfor %}
-                        </datalist>
-                    </div>
-                    <div>
-                        <label>Result</label>
-                        <input type="search" name="result" list="result-options" value="{{ selected_filters.result }}" placeholder="Search result...">
-                        <datalist id="result-options">
-                            {% for result in all_results %}
-                            <option value="{{ result }}"></option>
-                            {% endfor %}
-                        </datalist>
-                    </div>
-                </div>
-                <button type="submit" class="btn edit">Apply Filters</button>
-                <a href="/fabric_orders?tab=custom" class="btn secondary">Clear Filters</a>
-            </form>
+            {% set filter_fields = [
+                {'key': 'fabric', 'label': 'Fabric'},
+                {'key': 'uom', 'label': 'UOM'},
+                {'key': 'gsm', 'label': 'GSM'},
+                {'key': 'colour', 'label': 'Colour'},
+                {'key': 'dia', 'label': 'DIA'},
+                {'key': 'result', 'label': 'Result'},
+            ] %}
+            {% set filter_action = url_for('fabric_orders') %}
+            {% set clear_url = url_for('fabric_orders', tab='custom') %}
+            {% set export_url = None %}
+            {% set hidden_fields = {'tab': 'custom'} %}
+            {% include '_advanced_filters.html' %}
 
             <!-- Frozen cart indicators -->
             {% if frozen_orders %}
@@ -298,12 +249,12 @@
             <!-- Table Form for Freezing Selected -->
             <form method="POST" action="/fabric_orders/freeze" id="customFreezeForm">
                 <!-- Keep filters active during post -->
-                <input type="hidden" name="fabric" value="{{ selected_filters.fabric }}">
-                <input type="hidden" name="uom" value="{{ selected_filters.uom }}">
-                <input type="hidden" name="gsm" value="{{ selected_filters.gsm }}">
-                <input type="hidden" name="colour" value="{{ selected_filters.colour }}">
-                <input type="hidden" name="dia" value="{{ selected_filters.dia }}">
-                <input type="hidden" name="result" value="{{ selected_filters.result }}">
+                <input type="hidden" name="fabric" value="{{ ','.join(selected_filters.get('fabric', [])) }}">
+                <input type="hidden" name="uom" value="{{ ','.join(selected_filters.get('uom', [])) }}">
+                <input type="hidden" name="gsm" value="{{ ','.join(selected_filters.get('gsm', [])) }}">
+                <input type="hidden" name="colour" value="{{ ','.join(selected_filters.get('colour', [])) }}">
+                <input type="hidden" name="dia" value="{{ ','.join(selected_filters.get('dia', [])) }}">
+                <input type="hidden" name="result" value="{{ ','.join(selected_filters.get('result', [])) }}">
 
                 <div style="margin-bottom: 12px; display: flex; gap: 8px;">
                     <button type="submit" class="btn secondary">Freeze Selected</button>
