@@ -669,18 +669,24 @@ def _build_requirement_rows_raw():
             if key not in rows_dict:
                 rows_dict[key] = row
             else:
-                rows_dict[key]['actual_stock'] += actual
-                rows_dict[key]['wip'] += wip
-                rows_dict[key]['base_stock'] += base
-                rows_dict[key]['quantity'] += req_qty
-                rows_dict[key]['requirement_detail'] = (
-                    rows_dict[key]['actual_stock']
-                    + rows_dict[key]['wip']
-                    - rows_dict[key]['base_stock']
+                existing = rows_dict[key]
+                existing['actual_stock'] += actual
+                existing['wip'] += wip
+                existing['base_stock'] += base
+                existing['quantity'] += req_qty
+                existing['requirement_detail'] = (
+                    existing['actual_stock']
+                    + existing['wip']
+                    - existing['base_stock']
                 )
-                rows_dict[key]['result_type'] = (
-                    'EXCESS' if rows_dict[key]['requirement_detail'] > 0
-                    else 'REQUIRED' if rows_dict[key]['requirement_detail'] < 0
+                new_min = row['min_order_qty']
+                if new_min and existing['min_order_qty']:
+                    existing['min_order_qty'] = min(existing['min_order_qty'], new_min)
+                elif new_min:
+                    existing['min_order_qty'] = new_min
+                existing['result_type'] = (
+                    'EXCESS' if existing['requirement_detail'] > 0
+                    else 'REQUIRED' if existing['requirement_detail'] < 0
                     else 'BALANCED'
                 )
 
