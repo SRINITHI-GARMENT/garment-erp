@@ -409,16 +409,21 @@ def filter_values(selected_filters, key):
     return [str(part).strip() for part in value if str(part).strip()]
 
 def matches_filter(value, selected_values):
-    selected_values = [str(v).lower() for v in selected_values if str(v).strip()]
+    selected_values = [str(v).strip().lower() for v in selected_values if str(v).strip()]
     if not selected_values:
         return True
-    return str(value or '').lower() in selected_values
+    value_str = str(value or '').lower()
+    return any(selected_value in value_str for selected_value in selected_values)
 
 def matches_list_filter(values, selected_values):
-    selected_values = [str(v).lower() for v in selected_values if str(v).strip()]
+    selected_values = [str(v).strip().lower() for v in selected_values if str(v).strip()]
     if not selected_values:
         return True
-    return any(str(value or '').lower() in selected_values for value in values or [])
+    for value in values or []:
+        value_str = str(value or '').lower()
+        if any(selected_value in value_str for selected_value in selected_values):
+            return True
+    return False
 
 def build_filter_options(rows, include_result=False):
     options = {}
@@ -1266,11 +1271,9 @@ def fabric_orders():
         'status': request_list_arg('report_status'),
     }
 
+    filterable_selected_filters = request_filter_values(['fabric', 'uom', 'gsm', 'colour', 'dia', 'result'])
     all_rows = _build_requirement_rows_raw()
-    rows = filter_stock_rows(all_rows, selected_filters)
-    result_filter = filter_values(selected_filters, 'result')
-    if result_filter:
-        rows = [r for r in rows if matches_filter(r.get('result_type'), result_filter)]
+    rows = build_requirement_rows(filterable_selected_filters)
     frozen_orders = session.get('fabric_orders', [])
     frozen_map = {
         (
@@ -1433,7 +1436,7 @@ def fabric_orders():
 @app.route('/fabric_orders/freeze', methods=['POST'])
 @login_required
 def fabric_orders_freeze():
-    selected_filters = {
+    raw_selected_filters = {
         'fabric': request.form.get('fabric', '').strip(),
         'uom': request.form.get('uom', '').strip(),
         'gsm': request.form.get('gsm', '').strip(),
@@ -1441,7 +1444,10 @@ def fabric_orders_freeze():
         'dia': request.form.get('dia', '').strip(),
         'result': request.form.get('result', '').strip(),
     }
-    
+    selected_filters = {
+        k: [part.strip() for part in v.split(',') if part.strip()]
+        for k, v in raw_selected_filters.items()
+    }
     rows = build_requirement_rows(selected_filters)
     frozen_orders = session.get('fabric_orders', [])
     
