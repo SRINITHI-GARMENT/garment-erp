@@ -76,7 +76,7 @@ PERMISSION_GROUPS = [
     ("Fabric Orders", [
         ("fabric_orders_view","View"),("fabric_orders_add","Add"),
         ("fabric_orders_edit","Edit"),("fabric_orders_delete","Delete"),('fabric_orders_manual_add',"Manual order"),
-        ("fabric_orders_status","Change Status"),
+        ("fabric_orders_status","Change Status"),('fabric_orders_update_status',"Update Status")
     ]),
     ("Process Master", [
         ("process_view","View"),("process_add","Add"),
