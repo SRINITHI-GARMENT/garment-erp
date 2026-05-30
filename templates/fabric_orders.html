@@ -406,12 +406,16 @@
 
         <!-- TAB 3: REPORT -->
         <div id="report-tab" class="tab-content {% if tab == 'report' %}active{% endif %}">
-            <div class="orders-toolbar">
+            <div class="orders-toolbar" style="align-items: flex-start; gap: 10px;">
                 <div>
                     <h2>Generated Purchase Orders</h2>
                     <div class="helper-text">Filter with one or many values, then export the matching rows to Excel.</div>
                 </div>
-                <a class="btn edit" href="/fabric_orders/report/export?{{ request.query_string.decode() }}">Export Excel</a>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+                    <button type="button" class="btn secondary" onclick="openStatusModalForSelected()">Update Status</button>
+                    <button type="button" class="btn delete" onclick="confirmDeleteSelected()">Delete Selected</button>
+                    <a class="btn edit" href="/fabric_orders/report/export?{{ request.query_string.decode() }}">Export Excel</a>
+                </div>
             </div>
 
             {% set filter_fields = [
@@ -442,6 +446,7 @@
                 <table class="data-table" style="font-size: 13px;">
                     <thead>
                         <tr>
+                            <th style="width: 40px; text-align: center;"><input id="reportSelectAll" type="checkbox" style="width:16px; height:16px;"></th>
                             <th>PO No</th>
                             <th>Fabric (UOM/GSM)</th>
                             <th>Colour</th>
@@ -458,6 +463,7 @@
                         {% for o in orders %}
                             {% for item in o.order_items %}
                             <tr data-colour="{{ item.colour | join(', ') }}" data-dia="{{ item.dia | join(', ') }}">
+                                <td style="text-align: center;"><input class="report-row-checkbox" type="checkbox" value="{{ o.id }}" style="width:16px; height:16px;"></td>
                                 <td style="font-weight: bold; color: #0b3a4e;">{{ o.po_number }}</td>
                                 <td>{{ item.fabric_name }} ({{ item.uom or '-' }} / {{ item.gsm or '-' }})</td>
                                 <td>{{ item.colour | join(', ') }}</td>
@@ -470,19 +476,15 @@
                                     <span class="badge {{ o.status | lower | replace(' ', '-') }}">{{ o.status }}</span>
                                 </td>
                                 <td style="text-align: center; white-space: nowrap;">
-                                    <button type="button" class="btn edit btn-sm" onclick="openUpdateStatusModal('{{ o.id }}', '{{ o.status }}')" style="padding: 4px 8px; font-size: 11px;">Status</button>
                                     <a class="btn edit btn-sm" href="{{ url_for('fabric_orders_process_update', order_id=o.id, item_index=item.item_index) }}" style="padding: 4px 8px; font-size: 11px; background-color:#6b46c1;">Process Update</a>
                                     <button type="button" class="btn edit btn-sm" onclick='openEditPOModal({{ o | tojson | safe }})' style="padding: 4px 8px; font-size: 11px; background-color:#319795;">Edit</button>
                                     <button type="button" class="btn secondary btn-sm" onclick='openViewPOModal({{ o | tojson | safe }})' style="padding: 4px 8px; font-size: 11px;">View</button>
-                                    <form action="/fabric_orders/delete/{{ o.id }}" method="POST" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete this entire Purchase Order?')">
-                                        <button type="submit" class="btn delete btn-sm" style="padding: 4px 8px; font-size: 11px;">Delete</button>
-                                    </form>
                                 </td>
                             </tr>
                             {% endfor %}
                         {% else %}
                         <tr>
-                            <td colspan="10" style="text-align: center; padding: 30px; color: #a0aec0;">No generated orders found.</td>
+                            <td colspan="11" style="text-align: center; padding: 30px; color: #a0aec0;">No generated orders found.</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -588,14 +590,17 @@
 </div>
 
 <!-- 4. Update Status Modal -->
+<form id="deleteSelectedForm" action="/fabric_orders/delete_selected" method="POST"></form>
+
 <div id="statusModal" class="modal">
     <div class="modal-content" style="max-width: 400px;">
         <div class="modal-header">
             <h2>Update PO Status</h2>
             <button type="button" class="close-modal" onclick="closeModal('statusModal')">&times;</button>
         </div>
-        <form method="POST" action="/fabric_orders/update_status">
+        <form method="POST" action="/fabric_orders/update_status" id="statusForm">
             <input type="hidden" name="id" id="status_po_id" value="">
+            <div id="status_selected_ids"></div>
             <div class="modal-body">
                 <label for="status_select">Select Status</label>
                 <select name="status" id="status_select" required>
@@ -808,10 +813,63 @@
                 });
             });
         }
+
+        const reportSelectAllCb = document.getElementById('reportSelectAll');
+        if (reportSelectAllCb) {
+            reportSelectAllCb.addEventListener('change', function() {
+                document.querySelectorAll('.report-row-checkbox').forEach(cb => {
+                    cb.checked = this.checked;
+                });
+            });
+        }
         
         // Load initial rows for Manual Order Form
         addManualRow();
     });
+
+    function getSelectedReportOrderIds() {
+        return Array.from(document.querySelectorAll('.report-row-checkbox:checked')).map(cb => cb.value);
+    }
+
+    function openStatusModalForSelected() {
+        const selectedIds = getSelectedReportOrderIds();
+        if (!selectedIds.length) {
+            alert('Please tick at least one row to update status.');
+            return;
+        }
+        const selectedIdsContainer = document.getElementById('status_selected_ids');
+        selectedIdsContainer.innerHTML = '';
+        selectedIds.forEach(id => {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'selected_order_ids';
+            input.value = id;
+            selectedIdsContainer.appendChild(input);
+        });
+        document.getElementById('status_po_id').value = '';
+        openModal('statusModal');
+    }
+
+    function confirmDeleteSelected() {
+        const selectedIds = getSelectedReportOrderIds();
+        if (!selectedIds.length) {
+            alert('Please tick at least one row to delete.');
+            return;
+        }
+        if (!confirm('Are you sure you want to delete the selected order(s)?')) {
+            return;
+        }
+        const deleteForm = document.getElementById('deleteSelectedForm');
+        deleteForm.innerHTML = '';
+        selectedIds.forEach(id => {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'selected_order_ids';
+            input.value = id;
+            deleteForm.appendChild(input);
+        });
+        deleteForm.submit();
+    }
 
     function openGeneratePOModal() {
         openModal('customPOModal');

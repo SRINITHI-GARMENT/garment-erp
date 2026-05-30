@@ -1625,15 +1625,40 @@ def fabric_orders_manual_save():
 @app.route('/fabric_orders/update_status', methods=['POST'])
 @login_required
 def fabric_orders_update_status():
-    po_id = request.form.get('id', '').strip()
     status = request.form.get('status', '').strip()
-    if not po_id or not status:
+    selected_order_ids = request.form.getlist('selected_order_ids')
+    if not selected_order_ids:
+        po_id = request.form.get('id', '').strip()
+        if po_id:
+            selected_order_ids = [po_id]
+    if not selected_order_ids or not status:
         return redirect('/fabric_orders?tab=report&error=Invalid status update parameters.')
-    po = GeneratedOrder.query.get(po_id)
-    if po:
-        po.status = status
+    updated = False
+    for order_id in set(selected_order_ids):
+        po = GeneratedOrder.query.get(order_id)
+        if po:
+            po.status = status
+            updated = True
+    if updated:
         db.session.commit()
     return redirect('/fabric_orders?tab=report&success=Status updated successfully.')
+
+
+@app.route('/fabric_orders/delete_selected', methods=['POST'])
+@login_required
+def fabric_orders_delete_selected():
+    selected_order_ids = request.form.getlist('selected_order_ids')
+    if not selected_order_ids:
+        return redirect('/fabric_orders?tab=report&error=Please select at least one order to delete.')
+    deleted = False
+    for order_id in set(selected_order_ids):
+        po = GeneratedOrder.query.get(order_id)
+        if po:
+            db.session.delete(po)
+            deleted = True
+    if deleted:
+        db.session.commit()
+    return redirect('/fabric_orders?tab=report&success=Selected orders deleted successfully.')
 
 
 @app.route('/fabric_orders/edit', methods=['POST'])
