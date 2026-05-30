@@ -76,6 +76,7 @@ PERMISSION_GROUPS = [
     ("Fabric Orders", [
         ("fabric_orders_view","View"),("fabric_orders_add","Add"),
         ("fabric_orders_edit","Edit"),("fabric_orders_delete","Delete"),('fabric_orders_manual_add',"Manual order"),
+        ("fabric_orders_status","Change Status"),
     ]),
     ("Process Master", [
         ("process_view","View"),("process_add","Add"),
@@ -1623,6 +1624,7 @@ def fabric_orders_manual_save():
 
 
 @app.route('/fabric_orders/update_status', methods=['POST'])
+@permission_required('fabric_orders_update_status')
 @login_required
 def fabric_orders_update_status():
     status = request.form.get('status', '').strip()
