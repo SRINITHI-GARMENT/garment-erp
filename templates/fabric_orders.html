@@ -463,7 +463,7 @@
                         {% for o in orders %}
                             {% for item in o.order_items %}
                             <tr data-colour="{{ item.colour | join(', ') }}" data-dia="{{ item.dia | join(', ') }}">
-                                <td style="text-align: center;"><input class="report-row-checkbox" type="checkbox" value="{{ o.id }}" style="width:16px; height:16px;"></td>
+                                <td style="text-align: center;"><input class="report-row-checkbox" type="checkbox" name="selected_rows" value="{{ o.id }}|{{ item.item_index }}" style="width:16px; height:16px;"></td>
                                 <td style="font-weight: bold; color: #0b3a4e;">{{ o.po_number }}</td>
                                 <td>{{ item.fabric_name }} ({{ item.uom or '-' }} / {{ item.gsm or '-' }})</td>
                                 <td>{{ item.colour | join(', ') }}</td>
@@ -828,6 +828,12 @@
     });
 
     function getSelectedReportOrderIds() {
+        return Array.from(document.querySelectorAll('.report-row-checkbox:checked'))
+            .map(cb => cb.value.split('|')[0])
+            .filter(Boolean);
+    }
+
+    function getSelectedReportRowValues() {
         return Array.from(document.querySelectorAll('.report-row-checkbox:checked')).map(cb => cb.value);
     }
 
@@ -839,7 +845,7 @@
         }
         const selectedIdsContainer = document.getElementById('status_selected_ids');
         selectedIdsContainer.innerHTML = '';
-        selectedIds.forEach(id => {
+        Array.from(new Set(selectedIds)).forEach(id => {
             const input = document.createElement('input');
             input.type = 'hidden';
             input.name = 'selected_order_ids';
@@ -851,21 +857,21 @@
     }
 
     function confirmDeleteSelected() {
-        const selectedIds = getSelectedReportOrderIds();
-        if (!selectedIds.length) {
+        const selectedRows = getSelectedReportRowValues();
+        if (!selectedRows.length) {
             alert('Please tick at least one row to delete.');
             return;
         }
-        if (!confirm('Are you sure you want to delete the selected order(s)?')) {
+        if (!confirm('Are you sure you want to delete the selected row(s)?')) {
             return;
         }
         const deleteForm = document.getElementById('deleteSelectedForm');
         deleteForm.innerHTML = '';
-        selectedIds.forEach(id => {
+        selectedRows.forEach(value => {
             const input = document.createElement('input');
             input.type = 'hidden';
-            input.name = 'selected_order_ids';
-            input.value = id;
+            input.name = 'selected_rows';
+            input.value = value;
             deleteForm.appendChild(input);
         });
         deleteForm.submit();

@@ -1628,6 +1628,12 @@ def fabric_orders_update_status():
     status = request.form.get('status', '').strip()
     selected_order_ids = request.form.getlist('selected_order_ids')
     if not selected_order_ids:
+        selected_rows = request.form.getlist('selected_rows')
+        for row_value in selected_rows:
+            parts = row_value.split('|')
+            if parts and parts[0].strip():
+                selected_order_ids.append(parts[0].strip())
+    if not selected_order_ids:
         po_id = request.form.get('id', '').strip()
         if po_id:
             selected_order_ids = [po_id]
@@ -1647,18 +1653,42 @@ def fabric_orders_update_status():
 @app.route('/fabric_orders/delete_selected', methods=['POST'])
 @login_required
 def fabric_orders_delete_selected():
-    selected_order_ids = request.form.getlist('selected_order_ids')
-    if not selected_order_ids:
-        return redirect('/fabric_orders?tab=report&error=Please select at least one order to delete.')
-    deleted = False
-    for order_id in set(selected_order_ids):
+    selected_rows = request.form.getlist('selected_rows')
+    if not selected_rows:
+        return redirect('/fabric_orders?tab=report&error=Please select at least one row to delete.')
+
+    rows_by_order = {}
+    for row_value in selected_rows:
+        parts = row_value.split('|')
+        if len(parts) != 2:
+            continue
+        order_id_str, item_index_str = parts
+        try:
+            order_id = int(order_id_str.strip())
+            item_index = int(item_index_str.strip())
+        except ValueError:
+            continue
+        rows_by_order.setdefault(order_id, set()).add(item_index)
+
+    if not rows_by_order:
+        return redirect('/fabric_orders?tab=report&error=Invalid selected rows.')
+
+    deleted_any = False
+    for order_id, item_indices in rows_by_order.items():
         po = GeneratedOrder.query.get(order_id)
-        if po:
-            db.session.delete(po)
-            deleted = True
-    if deleted:
+        if not po:
+            continue
+        items = json.loads(po.order_items or '[]')
+        remaining_items = [item for idx, item in enumerate(items) if idx not in item_indices]
+        if len(remaining_items) != len(items):
+            deleted_any = True
+            if remaining_items:
+                po.order_items = json.dumps(remaining_items)
+            else:
+                db.session.delete(po)
+    if deleted_any:
         db.session.commit()
-    return redirect('/fabric_orders?tab=report&success=Selected orders deleted successfully.')
+    return redirect('/fabric_orders?tab=report&success=Selected rows deleted successfully.')
 
 
 @app.route('/fabric_orders/edit', methods=['POST'])
