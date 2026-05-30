@@ -1626,25 +1626,52 @@ def fabric_orders_manual_save():
 @login_required
 def fabric_orders_update_status():
     status = request.form.get('status', '').strip()
+    selected_rows = request.form.getlist('selected_rows')
     selected_order_ids = request.form.getlist('selected_order_ids')
-    if not selected_order_ids:
-        selected_rows = request.form.getlist('selected_rows')
+    updated = False
+
+    if selected_rows:
+        rows_by_order = {}
         for row_value in selected_rows:
             parts = row_value.split('|')
-            if parts and parts[0].strip():
-                selected_order_ids.append(parts[0].strip())
-    if not selected_order_ids:
-        po_id = request.form.get('id', '').strip()
-        if po_id:
-            selected_order_ids = [po_id]
-    if not selected_order_ids or not status:
-        return redirect('/fabric_orders?tab=report&error=Invalid status update parameters.')
-    updated = False
-    for order_id in set(selected_order_ids):
-        po = GeneratedOrder.query.get(order_id)
-        if po:
-            po.status = status
-            updated = True
+            if len(parts) != 2:
+                continue
+            order_id_str, item_index_str = parts
+            try:
+                order_id = int(order_id_str.strip())
+                item_index = int(item_index_str.strip())
+            except ValueError:
+                continue
+            rows_by_order.setdefault(order_id, set()).add(item_index)
+
+        if not rows_by_order or not status:
+            return redirect('/fabric_orders?tab=report&error=Invalid status update parameters.')
+
+        for order_id, item_indices in rows_by_order.items():
+            po = GeneratedOrder.query.get(order_id)
+            if not po:
+                continue
+            items = json.loads(po.order_items or '[]')
+            for idx in item_indices:
+                if 0 <= idx < len(items):
+                    items[idx]['status'] = status
+                    updated = True
+            po.order_items = json.dumps(items)
+
+    else:
+        if selected_order_ids:
+            order_ids = set(selected_order_ids)
+        else:
+            po_id = request.form.get('id', '').strip()
+            order_ids = {po_id} if po_id else set()
+        if not order_ids or not status:
+            return redirect('/fabric_orders?tab=report&error=Invalid status update parameters.')
+        for order_id in order_ids:
+            po = GeneratedOrder.query.get(order_id)
+            if po:
+                po.status = status
+                updated = True
+
     if updated:
         db.session.commit()
     return redirect('/fabric_orders?tab=report&success=Status updated successfully.')
