@@ -5,6 +5,7 @@ from datetime import datetime
 from collections import defaultdict
 from functools import wraps
 from io import BytesIO
+from urllib.parse import urlencode
 
 from flask import (
     Flask, render_template, request, redirect, jsonify, session, send_file
@@ -1798,6 +1799,47 @@ def fabric_orders_process_update(order_id, item_index):
         'process_name': pd.process_name,
         'fabric_incharge_name': pd.fabric_incharge_name
     } for pd in process_details]
+
+    report_query_keys = [
+        'tab',
+        'report_po_number',
+        'report_fabric',
+        'report_colour',
+        'report_dia',
+        'report_process_type',
+        'report_process',
+        'report_fabric_incharge',
+        'report_status',
+    ]
+
+    def build_report_redirect_query(extra=None):
+        params = []
+        seen = set()
+        for key in report_query_keys:
+            for value in request.values.getlist(key):
+                if value and (key, value) not in seen:
+                    params.append((key, value))
+                    seen.add((key, value))
+        if not any(k == 'tab' for k, _ in params):
+            params.append(('tab', 'report'))
+        if extra:
+            for k, v in extra.items():
+                if v is not None and (k, v) not in seen:
+                    params.append((k, v))
+                    seen.add((k, v))
+        return urlencode(params, doseq=True)
+
+    def build_back_url():
+        params = []
+        for key in report_query_keys:
+            for value in request.args.getlist(key):
+                if value:
+                    params.append((key, value))
+        if not any(k == 'tab' for k, _ in params):
+            params.append(('tab', 'report'))
+        query = urlencode(params, doseq=True)
+        return f'/fabric_orders?{query}' if query else '/fabric_orders?tab=report'
+
     if request.method == 'POST':
         move_qty_raw = request.form.get('move_qty', '').strip()
         process_type = request.form.get('process_type', '').strip()
@@ -1808,9 +1850,9 @@ def fabric_orders_process_update(order_id, item_index):
         except ValueError:
             move_qty = 0
         if move_qty <= 0 or move_qty > current_qty:
-            return redirect(f'/fabric_orders/process_update/{order_id}/{item_index}?error=Split quantity must be greater than 0 and not more than current quantity.')
+            return redirect(f'/fabric_orders/process_update/{order_id}/{item_index}?{build_report_redirect_query({'error': 'Split quantity must be greater than 0 and not more than current quantity.'})}')
         if not process_type:
-            return redirect(f'/fabric_orders/process_update/{order_id}/{item_index}?error=Process Type is required.')
+            return redirect(f'/fabric_orders/process_update/{order_id}/{item_index}?{build_report_redirect_query({'error': 'Process Type is required.'})}')
         if move_qty == current_qty:
             item['process_type'] = process_type
             item['process'] = process
@@ -1826,7 +1868,7 @@ def fabric_orders_process_update(order_id, item_index):
             items.append(moved_item)
         order.order_items = json.dumps(items)
         db.session.commit()
-        return redirect('/fabric_orders?tab=report&success=Process movement updated successfully.')
+        return redirect(f'/fabric_orders?{build_report_redirect_query({'success': 'Process movement updated successfully.'})}')
     item = dict(item)
     item.update(process_data)
     return render_template(
@@ -1840,6 +1882,7 @@ def fabric_orders_process_update(order_id, item_index):
         processes=processes,
         incharges=incharges,
         error=request.args.get('error'),
+        back_url=build_back_url(),
     )
 
 

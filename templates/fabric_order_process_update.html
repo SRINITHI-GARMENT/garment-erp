@@ -20,7 +20,15 @@
             Current Qty: {{ current_qty }}
         </div>
 
-        <form method="POST" class="stock-form" style="max-width: 720px;">
+        <form method="POST" action="{{ request.path }}" class="stock-form" style="max-width: 720px;">
+            {% for key, values in request.args.to_dict(flat=False).items() %}
+                {% if key.startswith('report_') or key == 'tab' %}
+                    {% for value in values %}
+                        <input type="hidden" name="{{ key }}" value="{{ value }}">
+                    {% endfor %}
+                {% endif %}
+            {% endfor %}
+            <input type="hidden" name="tab" value="report">
             <label>Split / Move Quantity</label>
             <input type="number" name="move_qty" min="0.01" max="{{ current_qty }}" step="0.01" value="{{ current_qty }}" required>
 
@@ -41,7 +49,7 @@
             </select>
 
             <button type="submit" class="btn edit">Update Process</button>
-            <a href="{{ url_for('fabric_orders', tab='report') }}" class="btn secondary">Back to Report</a>
+            <a href="{{ back_url }}" class="btn secondary">Back to Report</a>
         </form>
     </div>
 </div>

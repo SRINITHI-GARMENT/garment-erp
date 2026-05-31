@@ -476,7 +476,7 @@
                                     <span class="badge {{ (item.status or o.status) | lower | replace(' ', '-') }}">{{ item.status or o.status }}</span>
                                 </td>
                                 <td style="text-align: center; white-space: nowrap;">
-                                    <a class="btn edit btn-sm" href="{{ url_for('fabric_orders_process_update', order_id=o.id, item_index=item.item_index) }}" style="padding: 4px 8px; font-size: 11px; background-color:#6b46c1;">Process Update</a>
+                                    <a class="btn edit btn-sm" href="{{ url_for('fabric_orders_process_update', order_id=o.id, item_index=item.item_index) }}{% if request.query_string %}?{{ request.query_string.decode() }}{% endif %}" style="padding: 4px 8px; font-size: 11px; background-color:#6b46c1;">Process Update</a>
                                     <button type="button" class="btn edit btn-sm" onclick='openEditPOModal({{ o | tojson | safe }})' style="padding: 4px 8px; font-size: 11px; background-color:#319795;">Edit</button>
                                     <button type="button" class="btn secondary btn-sm" onclick='openViewPOModal({{ o | tojson | safe }})' style="padding: 4px 8px; font-size: 11px;">View</button>
                                 </td>
