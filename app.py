@@ -485,6 +485,17 @@ def get_stock_entries(entry_type, selected_filters=None):
     return filter_stock_rows(parsed_rows, selected_filters or {})
 
 
+def format_fabric_filter_value(item):
+    fabric = item.get('fabric_name') or ''
+    if not fabric:
+        return ''
+    uom = item.get('uom') or ''
+    gsm = item.get('gsm') or ''
+    if uom or gsm:
+        return f"{fabric} ({uom or '-'} / {gsm or '-'})"
+    return fabric
+
+
 def order_item_process(order, item):
     return {
         'process_type': item.get('process_type') or order.get('process_type') or '',
@@ -1364,7 +1375,7 @@ def fabric_orders():
 
     report_filter_options = {
         'po_number': sorted({o['po_number'] for o in orders_list if o.get('po_number')}),
-        'fabric': sorted({item.get('fabric_name') for o in orders_list for item in o['order_items'] if item.get('fabric_name')}),
+        'fabric': sorted({format_fabric_filter_value(item) for o in orders_list for item in o['order_items'] if format_fabric_filter_value(item)}),
         'colour': sorted({colour for o in orders_list for item in o['order_items'] for colour in item.get('colour', []) if colour}),
         'dia': sorted({dia for o in orders_list for item in o['order_items'] for dia in item.get('dia', []) if dia}),
         'process_type': sorted({item.get('process_type') for o in orders_list for item in o['order_items'] if item.get('process_type')}),
@@ -1374,8 +1385,9 @@ def fabric_orders():
     }
 
     def report_item_matches(order, item):
-        if selected_report_filters['fabric'] and item.get('fabric_name') not in selected_report_filters['fabric']:
-            return False
+        if selected_report_filters['fabric']:
+            if format_fabric_filter_value(item) not in selected_report_filters['fabric']:
+                return False
         if selected_report_filters['colour'] and not any(c in selected_report_filters['colour'] for c in item.get('colour', [])):
             return False
         if selected_report_filters['dia'] and not any(d in selected_report_filters['dia'] for d in item.get('dia', [])):
@@ -1936,7 +1948,7 @@ def fabric_orders_report_export():
             item_status = item.get('status') or order.status
             if selected_report_filters['status'] and item_status not in selected_report_filters['status']:
                 continue
-            if selected_report_filters['fabric'] and item.get('fabric_name') not in selected_report_filters['fabric']:
+            if selected_report_filters['fabric'] and format_fabric_filter_value(item) not in selected_report_filters['fabric']:
                 continue
             if selected_report_filters['colour'] and not any(c in selected_report_filters['colour'] for c in item.get('colour', [])):
                 continue
