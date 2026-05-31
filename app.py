@@ -680,9 +680,11 @@ def _build_requirement_rows_raw():
             else:
                 existing = rows_dict[key]
                 existing['actual_stock'] += actual
-                existing['wip'] += wip
                 existing['base_stock'] += base
                 existing['quantity'] += req_qty
+                # WIP is based on the unique fabric/color/dia/gsm combination,
+                # so do not accumulate it again for duplicate combo keys.
+                existing['wip'] = wip
                 existing['requirement_detail'] = (
                     existing['actual_stock']
                     + existing['wip']
