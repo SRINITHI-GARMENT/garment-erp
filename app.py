@@ -495,11 +495,14 @@ def order_item_process(order, item):
 
 def generated_order_wip_rows():
     rows = []
-    orders = GeneratedOrder.query.filter(
-        (GeneratedOrder.status.is_(None)) | (GeneratedOrder.status != 'Completed')
-    ).order_by(GeneratedOrder.created_at.desc()).all()
-    
+    orders = GeneratedOrder.query.order_by(GeneratedOrder.created_at.desc()).all()
+    excluded_statuses = {'completed', 'cancelled', 'cancel'}
+
     for order in orders:
+        order_status = (order.status or '').strip().lower()
+        if order_status in excluded_statuses:
+            continue
+
         order_dict = {
             'id': order.id,
             'po_number': order.po_number,
@@ -508,8 +511,12 @@ def generated_order_wip_rows():
             'fabric_incharge': order.fabric_incharge or '',
             'status': order.status or 'Pending',
         }
-        
+
         for index, item in enumerate(json.loads(order.order_items or '[]')):
+            item_status = (item.get('status') or order.status or '').strip().lower()
+            if item_status in excluded_statuses:
+                continue
+
             process_data = order_item_process(order_dict, item)
             rows.append({
                 'order_id': order.id,
@@ -524,7 +531,7 @@ def generated_order_wip_rows():
                 'process_type': process_data['process_type'],
                 'process': process_data['process'],
                 'fabric_incharge': process_data['fabric_incharge'],
-                'status': order.status or 'Pending',
+                'status': item.get('status') or order.status or 'Pending',
             })
     return rows
 
