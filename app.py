@@ -1381,7 +1381,7 @@ def fabric_orders():
         'process_type': sorted({item.get('process_type') for o in orders_list for item in o['order_items'] if item.get('process_type')}),
         'process': sorted({item.get('process') for o in orders_list for item in o['order_items'] if item.get('process')}),
         'fabric_incharge': sorted({item.get('fabric_incharge') for o in orders_list for item in o['order_items'] if item.get('fabric_incharge')}),
-        'status': sorted({(item.get('status') or o['status']) for o in orders_list for item in o['order_items'] if (item.get('status') or o['status'])}),
+        'status': sorted({str(item.get('status') or o['status'] or '').strip() for o in orders_list for item in o['order_items'] if (item.get('status') or o['status'])}),
     }
 
     def report_item_matches(order, item):
@@ -1399,8 +1399,9 @@ def fabric_orders():
         if selected_report_filters['fabric_incharge'] and item.get('fabric_incharge') not in selected_report_filters['fabric_incharge']:
             return False
         if selected_report_filters['status']:
-            status_value = item.get('status') or order.get('status')
-            if status_value not in selected_report_filters['status']:
+            status_value = str(item.get('status') or order.get('status') or '').strip().lower()
+            selected_statuses = [str(v).strip().lower() for v in selected_report_filters['status'] if str(v).strip()]
+            if status_value not in selected_statuses:
                 return False
         return True
 
@@ -1414,7 +1415,7 @@ def fabric_orders():
         return not item_filters_active or any(report_item_matches(order, item) for item in order['order_items'])
 
     filtered_orders = []
-    item_filters_active = any(selected_report_filters[key] for key in ('fabric', 'colour', 'dia', 'process_type', 'process', 'fabric_incharge'))
+    item_filters_active = any(selected_report_filters[key] for key in ('fabric', 'colour', 'dia', 'process_type', 'process', 'fabric_incharge', 'status'))
     for order in orders_list:
         if not order_matches_report_filters(order):
             continue

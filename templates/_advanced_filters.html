@@ -146,14 +146,22 @@
                 const checkbox = label.querySelector('input');
                 const disabled = diaValues.length > 0 && allowedColours.size > 0 && !allowedColours.has(checkbox.value);
                 checkbox.disabled = disabled;
+                if (disabled && checkbox.checked) {
+                    checkbox.checked = false;
+                }
                 label.style.opacity = disabled ? '0.45' : '1';
             });
             diaOptions.forEach(label => {
                 const checkbox = label.querySelector('input');
                 const disabled = colourValues.length > 0 && allowedDias.size > 0 && !allowedDias.has(checkbox.value);
                 checkbox.disabled = disabled;
+                if (disabled && checkbox.checked) {
+                    checkbox.checked = false;
+                }
                 label.style.opacity = disabled ? '0.45' : '1';
             });
+            refreshDisplay(document.querySelector('.advanced-filter[data-key="colour"]'));
+            refreshDisplay(document.querySelector('.advanced-filter[data-key="dia"]'));
         }
 
         filters.forEach(filter => {
