@@ -1931,36 +1931,45 @@ def fabric_orders_report_export():
         'fabric_incharge': request_list_arg('report_fabric_incharge'),
         'status': request_list_arg('report_status'),
     }
+    
+    def export_item_matches(order, item):
+        """Check if item matches all selected report filters"""
+        if selected_report_filters['po_number'] and order.po_number not in selected_report_filters['po_number']:
+            return False
+        if selected_report_filters['fabric']:
+            if format_fabric_filter_value(item) not in selected_report_filters['fabric']:
+                return False
+        if selected_report_filters['colour'] and not any(c in selected_report_filters['colour'] for c in item.get('colour', [])):
+            return False
+        if selected_report_filters['dia'] and not any(d in selected_report_filters['dia'] for d in item.get('dia', [])):
+            return False
+        if selected_report_filters['process_type'] and item.get('process_type') not in selected_report_filters['process_type']:
+            return False
+        if selected_report_filters['process'] and item.get('process') not in selected_report_filters['process']:
+            return False
+        if selected_report_filters['fabric_incharge'] and item.get('fabric_incharge') not in selected_report_filters['fabric_incharge']:
+            return False
+        if selected_report_filters['status']:
+            status_value = str(item.get('status') or order.status or '').strip().lower()
+            selected_statuses = [str(v).strip().lower() for v in selected_report_filters['status'] if str(v).strip()]
+            if status_value not in selected_statuses:
+                return False
+        return True
+    
     orders = GeneratedOrder.query.order_by(GeneratedOrder.created_at.desc()).all()
     export_rows = []
+    
     for order in orders:
         order_dict = {'po_number': order.po_number, 'process_type': order.process_type, 'process': order.process, 'fabric_incharge': order.fabric_incharge, 'status': order.status}
         items = json.loads(order.order_items or '[]')
-        if selected_report_filters['po_number'] and order.po_number not in selected_report_filters['po_number']:
-            continue
-        if selected_report_filters['process_type'] and order.process_type not in selected_report_filters['process_type']:
-            continue
-        if selected_report_filters['process'] and order.process not in selected_report_filters['process']:
-            continue
-        if selected_report_filters['fabric_incharge'] and order.fabric_incharge not in selected_report_filters['fabric_incharge']:
-            continue
+        
         for item in items:
             item.update(order_item_process(order_dict, item))
             item_status = item.get('status') or order.status
-            if selected_report_filters['status'] and item_status not in selected_report_filters['status']:
+            
+            if not export_item_matches(order, item):
                 continue
-            if selected_report_filters['fabric'] and format_fabric_filter_value(item) not in selected_report_filters['fabric']:
-                continue
-            if selected_report_filters['colour'] and not any(c in selected_report_filters['colour'] for c in item.get('colour', [])):
-                continue
-            if selected_report_filters['dia'] and not any(d in selected_report_filters['dia'] for d in item.get('dia', [])):
-                continue
-            if selected_report_filters['process_type'] and item.get('process_type') not in selected_report_filters['process_type']:
-                continue
-            if selected_report_filters['process'] and item.get('process') not in selected_report_filters['process']:
-                continue
-            if selected_report_filters['fabric_incharge'] and item.get('fabric_incharge') not in selected_report_filters['fabric_incharge']:
-                continue
+            
             export_rows.append([
                 order.po_number or '',
                 item.get('fabric_name', ''),
@@ -1975,6 +1984,7 @@ def fabric_orders_report_export():
                 item_status or '',
                 order.created_at.isoformat() if order.created_at else '',
             ])
+    
     wb = Workbook(); ws = wb.active; ws.title = 'Fabric Orders'
     ws.append(['PO No','Fabric','UOM','GSM','Colour','DIA','Order Qty','Process Type','Process','Fabric Incharge','Status','Created At'])
     for row in export_rows: ws.append(row)
