@@ -302,32 +302,20 @@
                                 <td>{{ row.gsm }}</td>
                                 <td>{{ row.colour | join(', ') }}</td>
                                 <td>{{ row.dia | join(', ') }}</td>
-                                <td class="base-stock-cell">{{ row.base_stock }}</td>
-                                <td class="actual-stock-cell">{{ row.actual_stock }}</td>
-                                <td class="wip-cell">{{ row.wip }}</td>
-                                <td class="requirement-cell" step="0.01">{{ row.requirement_detail }}</td>
+                                <td class="base-stock-cell">{{ "%.2f"|format(row.base_stock or 0) }}</td>
+                                <td class="actual-stock-cell">{{ "%.2f"|format(row.actual_stock or 0) }}</td>
+                                <td class="wip-cell">{{ "%.2f"|format(row.wip or 0) }}</td>
+                                <td class="requirement-cell">{{ "%.2f"|format(row.requirement_detail or 0) }}</td>
                                 <td>
                                     <span class="badge {{ row.result_type | lower }}">{{ row.result_type }}</span>
                                 </td>
-                                <td class="min-order-qty-cell">{{ row.min_order_qty }}</td>
-                                <td class="frozen-qty-cell">{{ row.frozen_qty }}</td>
-                                <td step="0.01">
-                                    
+                                <td class="min-order-qty-cell">{{ "%.2f"|format(row.min_order_qty or 0) }}</td>
+                                <td class="frozen-qty-cell">{{ "%.2f"|format(row.frozen_qty or 0) }}</td>
+                                <td>
                                     {% if row.result_type == 'REQUIRED' %}
-                                        {{
-                                            (
-                                                (row.actual_stock or 0) +
-                                                (row.wip or 0) +
-                                                (row.frozen_qty or 0)
-                                            )
-                                            -
-                                            (
-                                                (row.base_stock or 0) + (row.min_order_qty or 0)
-                                            )
-                                            
-                                        }}
+                                        {{ "%.2f"|format(((row.actual_stock or 0) + (row.wip or 0) + (row.frozen_qty or 0)) - ((row.base_stock or 0) + (row.min_order_qty or 0))) }}
                                     {% else %}
-                                        0
+                                        0.00
                                     {% endif %}
                                 </td>
                                 <td>
