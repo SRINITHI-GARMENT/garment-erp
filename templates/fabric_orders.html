@@ -305,13 +305,14 @@
                                 <td class="base-stock-cell">{{ row.base_stock }}</td>
                                 <td class="actual-stock-cell">{{ row.actual_stock }}</td>
                                 <td class="wip-cell">{{ row.wip }}</td>
-                                <td class="requirement-cell">{{ row.requirement_detail }}</td>
+                                <td class="requirement-cell" step="0.01">{{ row.requirement_detail }}</td>
                                 <td>
                                     <span class="badge {{ row.result_type | lower }}">{{ row.result_type }}</span>
                                 </td>
                                 <td class="min-order-qty-cell">{{ row.min_order_qty }}</td>
                                 <td class="frozen-qty-cell">{{ row.frozen_qty }}</td>
-                                <td>
+                                <td step="0.01">
+                                    
                                     {% if row.result_type == 'REQUIRED' %}
                                         {{
                                             (
