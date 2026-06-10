@@ -331,7 +331,7 @@
                                 </td>
                                 <td>
                                     <!-- Editable input box -->
-                                    <input type="number" step="0.01" min="0" name="order_qty_{{ row.index }}" value="{{ ('%.2f' % ((((row.actual_stock or 0) + (row.wip or 0) + (row.frozen_qty or 0)) - ((row.base_stock or 0) + (row.min_order_qty or 0))) * -1))) }}" class="order-qty-input" style="width: 80px; padding: 4px 6px; border: 1px solid #cbd5e0; border-radius: 4px;">
+                                    <input type="number" step="0.01" min="0" name="order_qty_{{ row.index }}" value="{{ ('%.2f' % (-1 * (((row.actual_stock or 0) + (row.wip or 0) + (row.frozen_qty or 0)) - ((row.base_stock or 0) + (row.min_order_qty or 0))))) }}" class="order-qty-input" style="width: 80px; padding: 4px 6px; border: 1px solid #cbd5e0; border-radius: 4px;">
                                 </td>
                             </tr>
                             {% else %}
