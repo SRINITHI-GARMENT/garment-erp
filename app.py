@@ -2632,6 +2632,7 @@ def cutting_completion():
 def edit_program(pid):
     p = Program.query.get_or_404(pid)
     if request.method == "POST":
+        p.dia = request.form.get("dia", p.dia)
         p.ratio = request.form.get("ratio", p.ratio)
         p.rolls = request.form.get("rolls", p.rolls)
         new_status = (request.form.get("status") or p.status or "pending").lower()
