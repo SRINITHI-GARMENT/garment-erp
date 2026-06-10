@@ -26,10 +26,10 @@
         {% include '_advanced_filters.html' %}
 
         <div class="summary-grid">
-            <div class="summary-card">Base Stock Total: {{ base_total or 0 }}</div>
-            <div class="summary-card">Actual Stock Total: {{ actual_stock_total or 0 }}</div>
-            <div class="summary-card">WIP Total: {{ wip_total or 0 }}</div>
-            <div class="summary-card">Requirement Total: {{ computed_requirement or 0 }}</div>
+            <div class="summary-card">Base Stock Total: {{ "%.2f"|format(base_total or 0) }}</div>
+            <div class="summary-card">Actual Stock Total: {{ "%.2f"|format(actual_stock_total or 0) }}</div>
+            <div class="summary-card">WIP Total: {{ "%.2f"|format(wip_total or 0) }}</div>
+            <div class="summary-card">Requirement Total: {{ "%.2f"|format(computed_requirement or 0) }}</div>
         </div>
 
         <div class="result-summary">
@@ -64,7 +64,7 @@
                 <td>{{ row.actual_stock }}</td>
                 <td>{{ row.wip }}</td>
                 <td>{{ row.base_stock }}</td>
-                <td>{{ row.requirement_detail }}</td>
+                <td>{{ "%.2f"|format(row.requirement_detail or 0) }}</td>
                 <td>{{ row.result_type }}</td>
             </tr>
             {% endfor %}

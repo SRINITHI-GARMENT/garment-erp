@@ -504,6 +504,39 @@ def order_item_process(order, item):
     }
 
 
+def merge_order_items(order, items):
+    merged = {}
+    order_status = (order.status or '').strip() if hasattr(order, 'status') else str(order.get('status') or '').strip()
+    for idx, item in enumerate(items):
+        process_type = item.get('process_type') or getattr(order, 'process_type', None) or order.get('process_type', '')
+        process = item.get('process') or getattr(order, 'process', None) or order.get('process', '')
+        fabric_incharge = item.get('fabric_incharge') or getattr(order, 'fabric_incharge', None) or order.get('fabric_incharge', '')
+        status = str(item.get('status') or order_status or '').strip()
+        key = (
+            getattr(order, 'po_number', None) or order.get('po_number'),
+            item.get('fabric_name'),
+            item.get('uom'),
+            item.get('gsm'),
+            tuple(item.get('colour') or []),
+            tuple(item.get('dia') or []),
+            process_type,
+            process,
+            fabric_incharge,
+            status,
+        )
+        if key not in merged:
+            merged[key] = dict(item)
+            merged[key]['order_qty'] = float(item.get('order_qty') or 0)
+            merged[key]['item_index'] = idx
+            merged[key]['status'] = status
+            merged[key]['process_type'] = process_type
+            merged[key]['process'] = process
+            merged[key]['fabric_incharge'] = fabric_incharge
+        else:
+            merged[key]['order_qty'] += float(item.get('order_qty') or 0)
+    return list(merged.values())
+
+
 def generated_order_wip_rows():
     rows = []
     orders = GeneratedOrder.query.order_by(GeneratedOrder.created_at.desc()).all()
@@ -1369,6 +1402,15 @@ def fabric_orders():
             item['process_type'] = process_data['process_type']
             item['process'] = process_data['process']
             item['fabric_incharge'] = process_data['fabric_incharge']
+        merged_items = merge_order_items(o_dict, o_dict['order_items'])
+        if json.dumps(merged_items, sort_keys=True) != json.dumps(o_dict['order_items'], sort_keys=True):
+            o.order_items = json.dumps(merged_items)
+            db.session.commit()
+            o_dict['order_items'] = merged_items
+        else:
+            o_dict['order_items'] = o_dict['order_items']
+        for item_index, item in enumerate(o_dict['order_items']):
+            item['item_index'] = item_index
         o_dict['item_count'] = len(o_dict['order_items'])
         o_dict['total_qty'] = sum(float(item.get('order_qty', 0)) for item in o_dict['order_items'])
         orders_list.append(o_dict)
@@ -1449,6 +1491,8 @@ def fabric_orders():
         'result': all_results,
     }
 
+    total_order_qty = sum(float(item.get('order_qty', 0)) for o in orders_list for item in o['order_items'])
+
     return render_template(
         'fabric_orders.html',
         title='Fabric Orders',
@@ -1473,6 +1517,7 @@ def fabric_orders():
         tab=request.args.get('tab', 'custom'),
         error=request.args.get('error'),
         success=request.args.get('success'),
+        total_order_qty=total_order_qty,
     )
 
 
@@ -1801,6 +1846,11 @@ def fabric_orders_process_update(order_id, item_index):
     if not order:
         return redirect('/fabric_orders?tab=report&error=PO not found.')
     items = json.loads(order.order_items or '[]')
+    merged_items = merge_order_items(order, items)
+    if json.dumps(merged_items, sort_keys=True) != json.dumps(items, sort_keys=True):
+        order.order_items = json.dumps(merged_items)
+        db.session.commit()
+        items = merged_items
     if item_index < 0 or item_index >= len(items):
         return redirect('/fabric_orders?tab=report&error=Order item not found.')
     item = items[item_index]
@@ -1892,7 +1942,8 @@ def fabric_orders_process_update(order_id, item_index):
             moved_item['fabric_incharge'] = fabric_incharge
             moved_item['split_from'] = item_index
             items.append(moved_item)
-        order.order_items = json.dumps(items)
+        merged_items = merge_order_items(order, items)
+        order.order_items = json.dumps(merged_items)
         db.session.commit()
         return redirect(f'/fabric_orders?{build_report_redirect_query({'success': 'Process movement updated successfully.'})}')
     item = dict(item)
@@ -1904,6 +1955,187 @@ def fabric_orders_process_update(order_id, item_index):
         item=item,
         item_index=item_index,
         current_qty=current_qty,
+        process_details=process_details,
+        processes=processes,
+        incharges=incharges,
+        error=request.args.get('error'),
+        back_url=build_back_url(),
+    )
+
+
+@app.route('/fabric_orders/process_update_multiple', methods=['GET', 'POST'])
+@login_required
+def fabric_orders_process_update_multiple():
+    selected_rows = request.values.getlist('selected_rows')
+    if not selected_rows:
+        return redirect('/fabric_orders?tab=report&error=Please select at least one row for process update.')
+
+    rows_by_order = {}
+    unique_rows = set()
+    for row_value in selected_rows:
+        parts = row_value.split('|')
+        if len(parts) != 2:
+            continue
+        try:
+            order_id = int(parts[0].strip())
+            item_index = int(parts[1].strip())
+        except ValueError:
+            continue
+        if (order_id, item_index) in unique_rows:
+            continue
+        unique_rows.add((order_id, item_index))
+        rows_by_order.setdefault(order_id, []).append(item_index)
+
+    order_rows = []
+    for order_id, item_indices in rows_by_order.items():
+        order = GeneratedOrder.query.get(order_id)
+        if not order:
+            continue
+        items = json.loads(order.order_items or '[]')
+        merged_items = merge_order_items(order, items)
+        if json.dumps(merged_items, sort_keys=True) != json.dumps(items, sort_keys=True):
+            order.order_items = json.dumps(merged_items)
+            db.session.commit()
+            items = merged_items
+        order_dict = {
+            'po_number': order.po_number,
+            'process_type': order.process_type,
+            'process': order.process,
+            'fabric_incharge': order.fabric_incharge,
+        }
+        for item_index in sorted(set(item_indices)):
+            if 0 <= item_index < len(items):
+                item = dict(items[item_index])
+                item['order_id'] = order_id
+                item['po_number'] = order.po_number
+                item['item_index'] = item_index
+                item['current_qty'] = float(item.get('order_qty') or 0)
+                item.update(order_item_process(order_dict, item))
+                order_rows.append(item)
+
+    if not order_rows:
+        return redirect('/fabric_orders?tab=report&error=Selected rows not found or invalid.')
+
+    incharges = [{'id': i.id, 'name': i.name} for i in FabricIncharge.query.order_by(FabricIncharge.name).all()]
+    processes = [{'id': p.id, 'name': p.name} for p in Process.query.order_by(Process.name).all()]
+    process_details = db.session.query(
+        ProcessDetails.id,
+        ProcessDetails.process_type,
+        ProcessDetails.process_id,
+        ProcessDetails.fabric_incharge_id,
+        Process.name.label('process_name'),
+        FabricIncharge.name.label('fabric_incharge_name')
+    ).outerjoin(Process).outerjoin(FabricIncharge).order_by(Process.name).all()
+    process_details = [{
+        'id': pd.id,
+        'process_type': pd.process_type,
+        'process_id': pd.process_id,
+        'fabric_incharge_id': pd.fabric_incharge_id,
+        'process_name': pd.process_name,
+        'fabric_incharge_name': pd.fabric_incharge_name
+    } for pd in process_details]
+
+    report_query_keys = [
+        'tab',
+        'report_po_number',
+        'report_fabric',
+        'report_colour',
+        'report_dia',
+        'report_process_type',
+        'report_process',
+        'report_fabric_incharge',
+        'report_status',
+    ]
+
+    def build_report_redirect_query(extra=None, include_selected_rows=False):
+        params = []
+        seen = set()
+        for key in report_query_keys:
+            for value in request.values.getlist(key):
+                if value and (key, value) not in seen:
+                    params.append((key, value))
+                    seen.add((key, value))
+        if include_selected_rows:
+            for value in request.values.getlist('selected_rows'):
+                if value and ('selected_rows', value) not in seen:
+                    params.append(('selected_rows', value))
+                    seen.add(('selected_rows', value))
+        if not any(k == 'tab' for k, _ in params):
+            params.append(('tab', 'report'))
+        if extra:
+            for k, v in extra.items():
+                if v is not None and (k, v) not in seen:
+                    params.append((k, v))
+                    seen.add((k, v))
+        return urlencode(params, doseq=True)
+
+    def build_back_url():
+        params = []
+        for key in report_query_keys:
+            for value in request.args.getlist(key):
+                if value:
+                    params.append((key, value))
+        if not any(k == 'tab' for k, _ in params):
+            params.append(('tab', 'report'))
+        query = urlencode(params, doseq=True)
+        return f'/fabric_orders?{query}' if query else '/fabric_orders?tab=report'
+
+    if request.method == 'POST':
+        updated_rows = []
+        for idx, row in enumerate(order_rows):
+            move_qty_raw = request.form.get(f'move_qty_{idx}', '').strip()
+            process_type = request.form.get(f'process_type_{idx}', '').strip()
+            process = request.form.get(f'process_{idx}', '').strip()
+            fabric_incharge = request.form.get(f'fabric_incharge_{idx}', '').strip()
+            try:
+                move_qty = float(move_qty_raw)
+            except ValueError:
+                move_qty = 0
+
+            if move_qty <= 0 or move_qty > row['current_qty']:
+                return redirect(f'/fabric_orders/process_update_multiple?{build_report_redirect_query({'error': 'Split quantity must be greater than 0 and not more than current quantity.'}, include_selected_rows=True)}')
+            if not process_type:
+                return redirect(f'/fabric_orders/process_update_multiple?{build_report_redirect_query({'error': 'Process Type is required for each row.'}, include_selected_rows=True)}')
+            if not process:
+                return redirect(f'/fabric_orders/process_update_multiple?{build_report_redirect_query({'error': 'Process is required for each row.'}, include_selected_rows=True)}')
+
+            updated_rows.append((row['order_id'], row['item_index'], row['current_qty'], move_qty, process_type, process, fabric_incharge))
+
+        rows_by_order_items = {}
+        for order_id, item_index, current_qty, move_qty, process_type, process, fabric_incharge in updated_rows:
+            rows_by_order_items.setdefault(order_id, []).append((item_index, current_qty, move_qty, process_type, process, fabric_incharge))
+
+        for order_id, row_list in rows_by_order_items.items():
+            order = GeneratedOrder.query.get(order_id)
+            if not order:
+                continue
+            items = json.loads(order.order_items or '[]')
+            for item_index, current_qty, move_qty, process_type, process, fabric_incharge in row_list:
+                if 0 <= item_index < len(items):
+                    item = items[item_index]
+                    if move_qty == current_qty:
+                        item['process_type'] = process_type
+                        item['process'] = process
+                        item['fabric_incharge'] = fabric_incharge
+                    else:
+                        item['order_qty'] = current_qty - move_qty
+                        moved_item = dict(item)
+                        moved_item['order_qty'] = move_qty
+                        moved_item['process_type'] = process_type
+                        moved_item['process'] = process
+                        moved_item['fabric_incharge'] = fabric_incharge
+                        moved_item['split_from'] = item_index
+                        items.append(moved_item)
+            merged_items = merge_order_items(order, items)
+            order.order_items = json.dumps(merged_items)
+
+        db.session.commit()
+        return redirect(f'/fabric_orders?{build_report_redirect_query({'success': 'Process movement updated successfully.'})}')
+
+    return render_template(
+        'fabric_orders_process_update_multiple.html',
+        title='Process Update',
+        order_rows=order_rows,
         process_details=process_details,
         processes=processes,
         incharges=incharges,

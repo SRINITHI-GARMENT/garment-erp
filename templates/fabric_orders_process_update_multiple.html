@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{ title }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<div class="container">
+    {% include 'sidebar.html' %}
+
+    <div class="main">
+        <h1>Process Update</h1>
+        {% if error %}
+            <div class="alert">{{ error }}</div>
+        {% endif %}
+
+        <div class="summary" style="margin-bottom: 18px;">
+            Selected Rows: {{ order_rows | length }}
+        </div>
+
+        <form method="POST" action="{{ request.path }}" class="stock-form" style="width: 100%; max-width: none;">
+            {% for key, values in request.args.to_dict(flat=False).items() %}
+                {% if key.startswith('report_') or key == 'tab' %}
+                    {% for value in values %}
+                        <input type="hidden" name="{{ key }}" value="{{ value }}">
+                    {% endfor %}
+                {% endif %}
+            {% endfor %}
+            <input type="hidden" name="tab" value="report">
+            {% for row in order_rows %}
+                <input type="hidden" name="selected_rows" value="{{ row.order_id }}|{{ row.item_index }}">
+            {% endfor %}
+
+            <div class="table-wrapper" style="margin-bottom: 16px; width: 100%; overflow-x: auto;">
+                <table class="data-table" style="font-size: 13px; width: 100%; table-layout: fixed;">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>PO #</th>
+                            <th>Fabric</th>
+                            <th>Colour</th>
+                            <th>DIA</th>
+                            <th>Current Qty</th>
+                            <th>Process Type</th>
+                            <th>Process</th>
+                            <th>Incharge</th>
+                            <th>Split Qty</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in order_rows %}
+                        <tr>
+                            <td>{{ loop.index }}</td>
+                            <td>{{ row.po_number }}</td>
+                            <td>{{ row.fabric_name }} ({{ row.uom or '-' }} / {{ row.gsm or '-' }})</td>
+                            <td>{{ row.colour | join(', ') }}</td>
+                            <td>{{ row.dia | join(', ') }}</td>
+                            <td>{{ row.current_qty }}</td>
+                            <td>
+                                <select name="process_type_{{ loop.index0 }}" id="process_type_{{ loop.index0 }}" onchange="handleRowProcessTypeChange({{ loop.index0 }})" required>
+                                    <option value="">-- Select Type --</option>
+                                    <option value="OWN PROCESS" {% if row.process_type == 'OWN PROCESS' %}selected{% endif %}>OWN PROCESS</option>
+                                    <option value="FABRIC PURCHASE" {% if row.process_type == 'FABRIC PURCHASE' %}selected{% endif %}>FABRIC PURCHASE</option>
+                                </select>
+                            </td>
+                            <td>
+                                <select name="process_{{ loop.index0 }}" id="process_{{ loop.index0 }}" required>
+                                    <option value="">-- Select Process --</option>
+                                </select>
+                            </td>
+                            <td>
+                                <select name="fabric_incharge_{{ loop.index0 }}" id="fabric_incharge_{{ loop.index0 }}" required>
+                                    <option value="">-- Select Incharge --</option>
+                                </select>
+                            </td>
+                            <td>
+                                <input type="number" name="move_qty_{{ loop.index0 }}" min="0.01" max="{{ row.current_qty }}" step="0.01" value="{{ row.current_qty }}" required style="width: 100px;">
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <button type="submit" class="btn edit">Update Process</button>
+            <a href="{{ back_url }}" class="btn secondary">Back to Report</a>
+        </form>
+    </div>
+</div>
+
+<script>
+    const processDetailsMapping = {{ process_details | tojson }};
+    const allProcesses = {{ processes | tojson }};
+    const allIncharges = {{ incharges | tojson }};
+    const orderRowsData = {{ order_rows | tojson }};
+
+    function addOption(select, value, text, selectedValue) {
+        const option = document.createElement('option');
+        option.value = value;
+        option.textContent = text;
+        if (value === selectedValue) option.selected = true;
+        select.appendChild(option);
+    }
+
+    function handleRowProcessTypeChange(index, selectedProcess = null, selectedIncharge = null) {
+        const typeSelect = document.getElementById(`process_type_${index}`);
+        const processSelect = document.getElementById(`process_${index}`);
+        const inchargeSelect = document.getElementById(`fabric_incharge_${index}`);
+        const type = typeSelect.value;
+
+        processSelect.innerHTML = '<option value="">-- Select Process --</option>';
+        inchargeSelect.innerHTML = '<option value="">-- Select Incharge --</option>';
+
+        const filtered = processDetailsMapping.filter(row => row.process_type === type);
+        const processNames = new Set();
+        const inchargeNames = new Set();
+        filtered.forEach(row => {
+            if (row.process_name && !processNames.has(row.process_name)) {
+                processNames.add(row.process_name);
+                addOption(processSelect, row.process_name, row.process_name, selectedProcess);
+            }
+            if (row.fabric_incharge_name && !inchargeNames.has(row.fabric_incharge_name)) {
+                inchargeNames.add(row.fabric_incharge_name);
+                addOption(inchargeSelect, row.fabric_incharge_name, row.fabric_incharge_name, selectedIncharge);
+            }
+        });
+
+        if (!filtered.length) {
+            allProcesses.forEach(row => addOption(processSelect, row.name, row.name, selectedProcess));
+            allIncharges.forEach(row => addOption(inchargeSelect, row.name, row.name, selectedIncharge));
+        }
+    }
+
+    function initRowSelects() {
+        orderRowsData.forEach((row, index) => {
+            handleRowProcessTypeChange(index, row.process, row.fabric_incharge);
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', initRowSelects);
+</script>
+</body>
+</html>

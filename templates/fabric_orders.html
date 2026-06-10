@@ -260,6 +260,16 @@
                     <button type="submit" class="btn secondary">Freeze Selected</button>
                 </div>
 
+                <div class="custom-totals-panel" style="margin-bottom: 12px; display: flex; flex-wrap: wrap; gap: 16px; font-size: 14px; color: #2d3748;">
+                    <div>Total Base Stock: <strong id="customTotalBaseStock">0.00</strong></div>
+                    <div>Total Actual Stock: <strong id="customTotalActualStock">0.00</strong></div>
+                    <div>Total WIP: <strong id="customTotalWip">0.00</strong></div>
+                    <div>Total Requirement: <strong id="customTotalRequirement">0.00</strong></div>
+                    <div>Total Min O.Qty: <strong id="customTotalMinOrderQty">0.00</strong></div>
+                    <div>Total Frozen Qty: <strong id="customTotalFrozenQty">0.00</strong></div>
+                    <div>Total Order Qty: <strong id="customOrderTotalQty">0.00</strong></div>
+                </div>
+
                 <div class="table-responsive custom-table-wrapper">
                     <table class="data-table custom-table">
                         <thead>
@@ -292,15 +302,15 @@
                                 <td>{{ row.gsm }}</td>
                                 <td>{{ row.colour | join(', ') }}</td>
                                 <td>{{ row.dia | join(', ') }}</td>
-                                <td>{{ row.base_stock }}</td>
-                                <td>{{ row.actual_stock }}</td>
-                                <td>{{ row.wip }}</td>
-                                <td>{{ row.requirement_detail }}</td>
+                                <td class="base-stock-cell">{{ row.base_stock }}</td>
+                                <td class="actual-stock-cell">{{ row.actual_stock }}</td>
+                                <td class="wip-cell">{{ row.wip }}</td>
+                                <td class="requirement-cell">{{ row.requirement_detail }}</td>
                                 <td>
                                     <span class="badge {{ row.result_type | lower }}">{{ row.result_type }}</span>
                                 </td>
-                                <td>{{ row.min_order_qty }}</td>
-                                <td>{{ row.frozen_qty }}</td>
+                                <td class="min-order-qty-cell">{{ row.min_order_qty }}</td>
+                                <td class="frozen-qty-cell">{{ row.frozen_qty }}</td>
                                 <td>
                                     {% if row.result_type == 'REQUIRED' %}
                                         {{
@@ -332,10 +342,16 @@
                         </tbody>
                     </table>
                 </div>
+                <div style="margin-top: 12px; display: flex; justify-content: flex-end; gap: 24px; align-items: center;">
+                    <div><strong>Total Order Qty:</strong> <span id="customOrderTotalQty">0.00</span></div>
+                </div>
             </form>
             <h3>Frozen Quantity</h3>
+            <div class="frozen-totals-panel" style="margin-bottom: 12px; display: flex; gap: 16px; font-size: 14px; color: #2d3748;">
+                <div>Total Frozen Qty: <strong id="frozenSummaryTotalQty">0.00</strong></div>
+            </div>
             <div class="table-wrapper">
-                <table class="data-table" style="font-size: 13px;">
+                <table id="frozenQuantitiesTable" class="data-table" style="font-size: 13px;">
                     <thead>
                         <tr>
                             <th>Fabric</th>
@@ -362,6 +378,12 @@
                         </tr>
                         {% endfor %}
                     </tbody>
+                    <tfoot>
+                        <tr style="font-weight: bold; background-color: #f7fafc;">
+                            <td colspan="5" style="text-align: right;">Total Frozen Qty</td>
+                            <td id="frozenTotalQty">0.00</td>
+                        </tr>
+                    </tfoot>
                 </table>
             </div>
         </div>
@@ -438,9 +460,13 @@
 
 
 
-            <h3 style="margin-top: 24px;">Orders List</h3>
-
-            
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px;">
+                <div>
+                    <h3 style="margin: 0;">Orders List</h3>
+                    <div style="margin-top: 6px; font-size: 14px; color: #4a5568;">Total Order Qty: <strong>{{ "%.2f"|format(total_order_qty or 0) }}</strong></div>
+                </div>
+                <button type="button" class="btn edit" onclick="openProcessUpdateSelected()" style="padding: 8px 12px;">Process Update Selected</button>
+            </div>
 
             <div class="table-wrapper">
                 <table class="data-table" style="font-size: 13px;">
@@ -822,10 +848,89 @@
                 });
             });
         }
-        
+
+        updateCustomTotals();
+
         // Load initial rows for Manual Order Form
         addManualRow();
     });
+
+        function updateCustomTotals() {
+        let totalOrderQty = 0;
+        let totalBaseStock = 0;
+        let totalActualStock = 0;
+        let totalWip = 0;
+        let totalRequirement = 0;
+        let totalMinOrderQty = 0;
+        let totalFrozenQty = 0;
+
+        document.querySelectorAll('.order-qty-input').forEach(input => {
+            const value = parseFloat(input.value);
+            if (!isNaN(value)) {
+                totalOrderQty += value;
+            }
+        });
+
+        document.querySelectorAll('.base-stock-cell').forEach(cell => {
+            const value = parseFloat(cell.textContent.trim());
+            if (!isNaN(value)) totalBaseStock += value;
+        });
+        document.querySelectorAll('.actual-stock-cell').forEach(cell => {
+            const value = parseFloat(cell.textContent.trim());
+            if (!isNaN(value)) totalActualStock += value;
+        });
+        document.querySelectorAll('.wip-cell').forEach(cell => {
+            const value = parseFloat(cell.textContent.trim());
+            if (!isNaN(value)) totalWip += value;
+        });
+        document.querySelectorAll('.requirement-cell').forEach(cell => {
+            const value = parseFloat(cell.textContent.trim());
+            if (!isNaN(value)) totalRequirement += value;
+        });
+        document.querySelectorAll('.min-order-qty-cell').forEach(cell => {
+            const value = parseFloat(cell.textContent.trim());
+            if (!isNaN(value)) totalMinOrderQty += value;
+        });
+        document.querySelectorAll('.frozen-qty-cell').forEach(cell => {
+            const value = parseFloat(cell.textContent.trim());
+            if (!isNaN(value)) totalFrozenQty += value;
+        });
+
+        document.querySelectorAll('#frozenQuantitiesTable tbody tr').forEach(row => {
+            const qtyCell = row.querySelector('td:last-child');
+            if (qtyCell) {
+                const value = parseFloat(qtyCell.textContent.trim());
+                if (!isNaN(value)) {
+                    totalFrozenQty += value;
+                }
+            }
+        });
+
+        const baseStockEl = document.getElementById('customTotalBaseStock');
+        if (baseStockEl) baseStockEl.textContent = totalBaseStock.toFixed(2);
+        const actualStockEl = document.getElementById('customTotalActualStock');
+        if (actualStockEl) actualStockEl.textContent = totalActualStock.toFixed(2);
+        const wipEl = document.getElementById('customTotalWip');
+        if (wipEl) wipEl.textContent = totalWip.toFixed(2);
+        const requirementEl = document.getElementById('customTotalRequirement');
+        if (requirementEl) requirementEl.textContent = totalRequirement.toFixed(2);
+        const minOrderQtyEl = document.getElementById('customTotalMinOrderQty');
+        if (minOrderQtyEl) minOrderQtyEl.textContent = totalMinOrderQty.toFixed(2);
+        const customFrozenQtyEl = document.getElementById('customTotalFrozenQty');
+        if (customFrozenQtyEl) customFrozenQtyEl.textContent = totalFrozenQty.toFixed(2);
+        const orderTotalEl = document.getElementById('customOrderTotalQty');
+        if (orderTotalEl) orderTotalEl.textContent = totalOrderQty.toFixed(2);
+
+        const frozenSummaryTotalEl = document.getElementById('frozenSummaryTotalQty');
+        if (frozenSummaryTotalEl) frozenSummaryTotalEl.textContent = totalFrozenQty.toFixed(2);
+        const frozenTotalEl = document.getElementById('frozenTotalQty');
+        if (frozenTotalEl) frozenTotalEl.textContent = totalFrozenQty.toFixed(2);
+
+        document.querySelectorAll('.order-qty-input').forEach(input => {
+            input.removeEventListener('input', updateCustomTotals);
+            input.addEventListener('input', updateCustomTotals);
+        });
+    }
 
     function getSelectedReportOrderIds() {
         return Array.from(document.querySelectorAll('.report-row-checkbox:checked'))
@@ -854,6 +959,20 @@
         });
         document.getElementById('status_po_id').value = '';
         openModal('statusModal');
+    }
+
+    function openProcessUpdateSelected() {
+        const selectedRows = getSelectedReportRowValues();
+        if (!selectedRows.length) {
+            alert('Please tick at least one row to process update.');
+            return;
+        }
+        const params = new URLSearchParams(window.location.search);
+        selectedRows.forEach(rowValue => params.append('selected_rows', rowValue));
+        if (!params.has('tab')) {
+            params.set('tab', 'report');
+        }
+        window.location.href = '/fabric_orders/process_update_multiple?' + params.toString();
     }
 
     function confirmDeleteSelected() {
