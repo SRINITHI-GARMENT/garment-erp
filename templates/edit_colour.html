@@ -9,12 +9,6 @@
 <div class="main">
     <h2>Edit Colour</h2>
 
-    {% if error %}
-    <div class="alert" style="color:#b00;background:#fee;padding:10px;border:1px solid #d00;margin-bottom:16px;">
-        {{ error }}
-    </div>
-    {% endif %}
-
     <form method="POST">
         <input type="text" name="colour" value="{{ colour.name }}" required>
         <input type="text" name="code" value="{{ colour.code }}">

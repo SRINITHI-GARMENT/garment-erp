@@ -5,14 +5,13 @@ from datetime import datetime
 from collections import defaultdict
 from functools import wraps
 from io import BytesIO
-from urllib.parse import urlencode, quote_plus
+from urllib.parse import urlencode
 
 from flask import (
     Flask, render_template, request, redirect, jsonify, session, send_file
 )
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import text
-from sqlalchemy.exc import SQLAlchemyError
 from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
@@ -146,7 +145,7 @@ class Fabric(db.Model):
 
 class Product(db.Model):
     __tablename__ = "products"
-    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(120), nullable=False)
     brand = db.Column(db.String(120), nullable=False)
     category = db.Column(db.String(120), nullable=False)
@@ -318,24 +317,6 @@ def permission_required(perm):
 @app.context_processor
 def inject_user():
     return {"current_user": current_user()}
-
-
-def redirect_with_error(url, error):
-    if not error:
-        return redirect(url)
-    error_text = quote_plus(str(error))
-    separator = '&' if '?' in url else '?'
-    return redirect(f'{url}{separator}error={error_text}')
-
-
-@app.errorhandler(SQLAlchemyError)
-def handle_sqlalchemy_error(exception):
-    db.session.rollback()
-    error_message = str(exception.__cause__ or exception)
-    target = request.referrer or request.path or '/'
-    if not target:
-        return f'Database error: {error_message}', 500
-    return redirect_with_error(target, error_message)
 
 
 # ---------------- DICT HELPERS ----------------
@@ -1002,23 +983,16 @@ def dashboard():
 def colour():
     u = current_user()
     if not u.has("colour_view"): return "Access denied.", 403
-    error = request.args.get("error")
     search = request.args.get("search", "")
     if request.method == "POST":
         if not u.has("colour_add"): return "Access denied.", 403
         c = Colour(name=request.form["colour"], code=request.form["code"])
-        db.session.add(c)
-        try:
-            db.session.commit()
-            return redirect("/colour")
-        except SQLAlchemyError as e:
-            db.session.rollback()
-            return redirect_with_error("/colour", str(e))
+        db.session.add(c); db.session.commit()
+        return redirect("/colour")
     q = Colour.query
     if search: q = q.filter(Colour.name.ilike(f"%{search}%"))
     return render_template("colour_master.html",
-        colours=[_to_dict_colour(c) for c in q.order_by(Colour.id).all()],
-        error=error)
+        colours=[_to_dict_colour(c) for c in q.order_by(Colour.id).all()])
 
 @app.route("/delete_colour/<int:index>")
 @permission_required("colour_delete")
@@ -1031,17 +1005,10 @@ def delete_colour(index):
 @permission_required("colour_edit")
 def edit_colour(index):
     c = Colour.query.get_or_404(index)
-    error = request.args.get("error")
     if request.method == "POST":
-        c.name = request.form["colour"]
-        c.code = request.form["code"]
-        try:
-            db.session.commit()
-            return redirect("/colour")
-        except SQLAlchemyError as e:
-            db.session.rollback()
-            return redirect_with_error(f"/edit_colour/{index}", str(e))
-    return render_template("edit_colour.html", colour=_to_dict_colour(c), index=c.id, error=error)
+        c.name = request.form["colour"]; c.code = request.form["code"]
+        db.session.commit(); return redirect("/colour")
+    return render_template("edit_colour.html", colour=_to_dict_colour(c), index=c.id)
 
 
 # ---------------- SIZE ----------------
@@ -2403,7 +2370,6 @@ def product():
 @app.route("/product/new", methods=["GET", "POST"])
 @permission_required("product_add")
 def product_new():
-    error = None
     if request.method == "POST":
         p = Product(name=request.form["name"],
                     brand=request.form.get("brand",""),
@@ -2412,24 +2378,17 @@ def product_new():
                     fabric=request.form.get("fabric",""))
         p.colors = [c for c in request.form.getlist("colors[]") if c]
         p.sizes = [s for s in request.form.getlist("sizes[]") if s]
-        db.session.add(p)
-        try:
-            db.session.commit()
-            return redirect("/product")
-        except Exception as e:
-            db.session.rollback()
-            error = str(e)
-    return render_template("product_form.html", product=None if not request.method == "POST" else _to_dict_product(p),
+        db.session.add(p); db.session.commit()
+        return redirect("/product")
+    return render_template("product_form.html", product=None,
         fabrics=[_to_dict_fabric(f) for f in Fabric.query.order_by(Fabric.id).all()],
         colours=[_to_dict_colour(c) for c in Colour.query.order_by(Colour.id).all()],
-        sizes=[_to_dict_size(s) for s in Size.query.order_by(Size.id).all()],
-        error=error)
+        sizes=[_to_dict_size(s) for s in Size.query.order_by(Size.id).all()])
 
 @app.route("/edit_product/<int:pid>", methods=["GET", "POST"])
 @permission_required("product_edit")
 def edit_product(pid):
     p = Product.query.get_or_404(pid)
-    error = None
     if request.method == "POST":
         p.name = request.form["name"]
         p.brand = request.form.get("brand","")
@@ -2438,17 +2397,11 @@ def edit_product(pid):
         p.fabric = request.form.get("fabric","")
         p.colors = [c for c in request.form.getlist("colors[]") if c]
         p.sizes = [s for s in request.form.getlist("sizes[]") if s]
-        try:
-            db.session.commit()
-            return redirect("/product")
-        except Exception as e:
-            db.session.rollback()
-            error = str(e)
+        db.session.commit(); return redirect("/product")
     return render_template("product_form.html", product=_to_dict_product(p),
         fabrics=[_to_dict_fabric(f) for f in Fabric.query.order_by(Fabric.id).all()],
         colours=[_to_dict_colour(c) for c in Colour.query.order_by(Colour.id).all()],
-        sizes=[_to_dict_size(s) for s in Size.query.order_by(Size.id).all()],
-        error=error)
+        sizes=[_to_dict_size(s) for s in Size.query.order_by(Size.id).all()])
 
 @app.route("/delete_product/<int:pid>")
 @permission_required("product_delete")
