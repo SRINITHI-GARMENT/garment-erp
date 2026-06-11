@@ -1002,16 +1002,23 @@ def dashboard():
 def colour():
     u = current_user()
     if not u.has("colour_view"): return "Access denied.", 403
+    error = request.args.get("error")
     search = request.args.get("search", "")
     if request.method == "POST":
         if not u.has("colour_add"): return "Access denied.", 403
         c = Colour(name=request.form["colour"], code=request.form["code"])
-        db.session.add(c); db.session.commit()
-        return redirect("/colour")
+        db.session.add(c)
+        try:
+            db.session.commit()
+            return redirect("/colour")
+        except SQLAlchemyError as e:
+            db.session.rollback()
+            return redirect_with_error("/colour", str(e))
     q = Colour.query
     if search: q = q.filter(Colour.name.ilike(f"%{search}%"))
     return render_template("colour_master.html",
-        colours=[_to_dict_colour(c) for c in q.order_by(Colour.id).all()])
+        colours=[_to_dict_colour(c) for c in q.order_by(Colour.id).all()],
+        error=error)
 
 @app.route("/delete_colour/<int:index>")
 @permission_required("colour_delete")
@@ -1024,10 +1031,17 @@ def delete_colour(index):
 @permission_required("colour_edit")
 def edit_colour(index):
     c = Colour.query.get_or_404(index)
+    error = request.args.get("error")
     if request.method == "POST":
-        c.name = request.form["colour"]; c.code = request.form["code"]
-        db.session.commit(); return redirect("/colour")
-    return render_template("edit_colour.html", colour=_to_dict_colour(c), index=c.id)
+        c.name = request.form["colour"]
+        c.code = request.form["code"]
+        try:
+            db.session.commit()
+            return redirect("/colour")
+        except SQLAlchemyError as e:
+            db.session.rollback()
+            return redirect_with_error(f"/edit_colour/{index}", str(e))
+    return render_template("edit_colour.html", colour=_to_dict_colour(c), index=c.id, error=error)
 
 
 # ---------------- SIZE ----------------
