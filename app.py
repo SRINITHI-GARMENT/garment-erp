@@ -145,7 +145,7 @@ class Fabric(db.Model):
 
 class Product(db.Model):
     __tablename__ = "products"
-    id = db.Column(db.Integer, primary_key=True)
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     name = db.Column(db.String(120), nullable=False)
     brand = db.Column(db.String(120), nullable=False)
     category = db.Column(db.String(120), nullable=False)
@@ -2370,6 +2370,7 @@ def product():
 @app.route("/product/new", methods=["GET", "POST"])
 @permission_required("product_add")
 def product_new():
+    error = None
     if request.method == "POST":
         p = Product(name=request.form["name"],
                     brand=request.form.get("brand",""),
@@ -2378,17 +2379,24 @@ def product_new():
                     fabric=request.form.get("fabric",""))
         p.colors = [c for c in request.form.getlist("colors[]") if c]
         p.sizes = [s for s in request.form.getlist("sizes[]") if s]
-        db.session.add(p); db.session.commit()
-        return redirect("/product")
-    return render_template("product_form.html", product=None,
+        db.session.add(p)
+        try:
+            db.session.commit()
+            return redirect("/product")
+        except Exception as e:
+            db.session.rollback()
+            error = str(e)
+    return render_template("product_form.html", product=None if not request.method == "POST" else _to_dict_product(p),
         fabrics=[_to_dict_fabric(f) for f in Fabric.query.order_by(Fabric.id).all()],
         colours=[_to_dict_colour(c) for c in Colour.query.order_by(Colour.id).all()],
-        sizes=[_to_dict_size(s) for s in Size.query.order_by(Size.id).all()])
+        sizes=[_to_dict_size(s) for s in Size.query.order_by(Size.id).all()],
+        error=error)
 
 @app.route("/edit_product/<int:pid>", methods=["GET", "POST"])
 @permission_required("product_edit")
 def edit_product(pid):
     p = Product.query.get_or_404(pid)
+    error = None
     if request.method == "POST":
         p.name = request.form["name"]
         p.brand = request.form.get("brand","")
@@ -2397,11 +2405,17 @@ def edit_product(pid):
         p.fabric = request.form.get("fabric","")
         p.colors = [c for c in request.form.getlist("colors[]") if c]
         p.sizes = [s for s in request.form.getlist("sizes[]") if s]
-        db.session.commit(); return redirect("/product")
+        try:
+            db.session.commit()
+            return redirect("/product")
+        except Exception as e:
+            db.session.rollback()
+            error = str(e)
     return render_template("product_form.html", product=_to_dict_product(p),
         fabrics=[_to_dict_fabric(f) for f in Fabric.query.order_by(Fabric.id).all()],
         colours=[_to_dict_colour(c) for c in Colour.query.order_by(Colour.id).all()],
-        sizes=[_to_dict_size(s) for s in Size.query.order_by(Size.id).all()])
+        sizes=[_to_dict_size(s) for s in Size.query.order_by(Size.id).all()],
+        error=error)
 
 @app.route("/delete_product/<int:pid>")
 @permission_required("product_delete")
