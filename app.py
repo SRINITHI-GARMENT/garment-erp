@@ -5,13 +5,14 @@ from datetime import datetime
 from collections import defaultdict
 from functools import wraps
 from io import BytesIO
-from urllib.parse import urlencode
+from urllib.parse import urlencode, quote_plus
 
 from flask import (
     Flask, render_template, request, redirect, jsonify, session, send_file
 )
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
@@ -317,6 +318,24 @@ def permission_required(perm):
 @app.context_processor
 def inject_user():
     return {"current_user": current_user()}
+
+
+def redirect_with_error(url, error):
+    if not error:
+        return redirect(url)
+    error_text = quote_plus(str(error))
+    separator = '&' if '?' in url else '?'
+    return redirect(f'{url}{separator}error={error_text}')
+
+
+@app.errorhandler(SQLAlchemyError)
+def handle_sqlalchemy_error(exception):
+    db.session.rollback()
+    error_message = str(exception.__cause__ or exception)
+    target = request.referrer or request.path or '/'
+    if not target:
+        return f'Database error: {error_message}', 500
+    return redirect_with_error(target, error_message)
 
 
 # ---------------- DICT HELPERS ----------------
