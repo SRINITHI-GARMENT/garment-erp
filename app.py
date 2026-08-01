@@ -336,26 +336,25 @@ def _next_program_no():
     month_suffix = now.strftime("%b").upper()
     prefix = f"PR{year_suffix}{month_suffix}"
 
-    with db.session.begin():
-        db.session.execute(text("SELECT pg_advisory_xact_lock(hashtext('program_no_generation'))"))
+    db.session.execute(text("SELECT pg_advisory_xact_lock(hashtext('program_no_generation'))"))
 
-        pattern = f"{prefix}%"
-        latest = (
-            Program.query.filter(Program.program_no.like(pattern))
-            .order_by(Program.program_no.desc())
-            .first()
-        )
+    pattern = f"{prefix}%"
+    latest = (
+        Program.query.filter(Program.program_no.like(pattern))
+        .order_by(Program.program_no.desc())
+        .first()
+    )
 
-        if latest and latest.program_no:
-            try:
-                last_num = int(latest.program_no[len(prefix):])
-            except (TypeError, ValueError):
-                last_num = 0
-        else:
+    if latest and latest.program_no:
+        try:
+            last_num = int(latest.program_no[len(prefix):])
+        except (TypeError, ValueError):
             last_num = 0
+    else:
+        last_num = 0
 
-        next_num = last_num + 1
-        return f"{prefix}{next_num:03d}"
+    next_num = last_num + 1
+    return f"{prefix}{next_num:03d}"
 
 
 def _grouped_programs():
