@@ -331,9 +331,31 @@ def _to_dict_supplier(s):
             "address":s.address,"created_at":s.created_at}
 
 def _next_program_no():
-    result = db.session.execute(text("SELECT nextval('program_no_seq')"))
-    next_num = result.scalar()
-    return f"PRG{next_num:03d}"
+    now = datetime.now()
+    year_suffix = now.strftime("%y")
+    month_suffix = now.strftime("%b").upper()
+    prefix = f"PR{year_suffix}{month_suffix}"
+
+    with db.session.begin():
+        db.session.execute(text("SELECT pg_advisory_xact_lock(hashtext('program_no_generation'))"))
+
+        pattern = f"{prefix}%"
+        latest = (
+            Program.query.filter(Program.program_no.like(pattern))
+            .order_by(Program.program_no.desc())
+            .first()
+        )
+
+        if latest and latest.program_no:
+            try:
+                last_num = int(latest.program_no[len(prefix):])
+            except (TypeError, ValueError):
+                last_num = 0
+        else:
+            last_num = 0
+
+        next_num = last_num + 1
+        return f"{prefix}{next_num:03d}"
 
 
 def _grouped_programs():
