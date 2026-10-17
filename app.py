@@ -2713,6 +2713,23 @@ def _safe_migrate():
             "SELECT setval('program_no_seq', COALESCE(MAX(NULLIF(regexp_replace(program_no, '\\D', '', 'g'), '')::integer), 1), true)"
             " FROM programs"
         ))
+        # Ensure all serial sequences are synced to MAX(id)
+        for tbl in [
+            "colours", "sizes", "fabrics", "products", "suppliers",
+            "users", "stock_entry", "generated_orders", "fabric_incharge",
+            "process", "process_details"
+        ]:
+            try:
+                conn.execute(text(f"""
+                    SELECT setval(
+                        pg_get_serial_sequence('{tbl}', 'id'),
+                        COALESCE((SELECT MAX(id) FROM {tbl}), 1),
+                        (SELECT MAX(id) IS NOT NULL FROM {tbl})
+                    )
+                """))
+            except Exception as seq_err:
+                print(f"Warning syncing sequence for {tbl}:", seq_err)
+
 
 def _seed_admin():
     if not User.query.filter_by(username="admin").first():
